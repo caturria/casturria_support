@@ -1,13 +1,13 @@
-#Casturria_support
+# Casturria_support
 
-##Purpose
+## Purpose
 
 This is a supporting library for use by the Casturria playout system. At the time of this writing, Casturria is a project still in its infancy which aims to become a powerful internet radio automation suite.
 
 This component provides a high-level interface to various facilities, including those provided by FFmpeg's Libav* libraries, to be used within Casturria via Deno's foreign function interface (FFI).
 
 
-#License
+# License
 
     Copyright (C) 2026  Jordan Verner and contributors
 
