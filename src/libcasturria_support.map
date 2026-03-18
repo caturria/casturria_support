@@ -1,0 +1,6 @@
+LIBCASTURRIA_SUPPORT_0.0 {
+global:
+    casturria_*;
+local:
+    *;
+};
