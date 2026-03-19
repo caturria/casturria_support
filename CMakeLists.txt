@@ -48,25 +48,23 @@ target_link_options(casturria_support PRIVATE
                                      -static-libstdc++
                                      )
                                      target_link_libraries(casturria_support PRIVATE
-                                     $ {
-    SWSCALE
-}
-$ {AVFORMAT}
-$ {AVCODEC}
-$ {SWRESAMPLE}
-$ {AVUTIL}
-$ {AVFILTER}
-$ {VORBIS}
-$ {VORBISENC}
-$ {OPUS}
-$ {OGG}
-$ {LAME}
-$ {CRYPTO}
-$ {TLS}
-$ {SSL}
-$ {Z}
+                                     ${SWSCALE}
+${AVFORMAT}
+${AVCODEC}
+${SWRESAMPLE}
+${AVUTIL}
+${AVFILTER}
+${VORBIS}
+${VORBISENC}
+${OPUS}
+${OGG}
+${LAME}
+${CRYPTO}
+${TLS}
+${SSL}
+${Z}
 
 )
 target_include_directories(casturria_support PRIVATE
-                           $ {DEP_INCLUDE_DIR})
+                           ${DEP_INCLUDE_DIR})
 install(TARGETS casturria_support)

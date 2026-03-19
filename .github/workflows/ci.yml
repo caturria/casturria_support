@@ -7,10 +7,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build the library
+      - name: Build dependencies
         run: |
           sudo apt update -y
           sudo apt upgrade -y
           bash ./bootstrap.sh
-          
-
+      - name: Build the library
+        run: |
+          export CMAKE_PREFIX_PATH=`pwd`/build/output
+          export CMAKE_LIBRARY_PATH=`pwd`/build/output/lib
+          echo "Path is ${CMAKE_PREFIX_PATH}"
+          dir ${CMAKE_PREFIX_PATH}/include
+          cmake -DCMAKE_INSTALL_PREFIX=`pwd`/build/output .
+          make
+          make install
