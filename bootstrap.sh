@@ -32,16 +32,16 @@ LLVM_VERSION=21
 #Install Clang from LLVM repo.
                                                                               wget https://apt.llvm.org/llvm.sh
                                                                               chmod 755 llvm.sh
-                                                                              sudo ./llvm.sh $ {LLVM_VERSION}
+                                                                              sudo ./llvm.sh ${LLVM_VERSION}
                                                                               rm ./llvm.sh
 
 #Configure Clang as the default C/ C++ compiler.
-                                                                              sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang-21 100
-                                                                              sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang-21 100
-                                                                              sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/clang-21 100
-                                                                              sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/clang-21 100
-                                                                              sudo update-alternatives --install /usr/bin/ld ld /usr/bin/lld-21 100
-                                                                              sudo update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-21 100
+                                                                              sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang-${LLVM_VERSION} 100
+                                                                              sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang-${LLVM_VERSION} 100
+                                                                              sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/clang-${LLVM_VERSION} 100
+                                                                              sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/clang-${LLVM_VERSION} 100
+                                                                              sudo update-alternatives --install /usr/bin/ld ld /usr/bin/lld-${LLVM_VERSION} 100
+                                                                              sudo update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-${LLVM_VERSION} 100
 
                                                                               mkdir ./build
                                                                               cd ./build
@@ -49,8 +49,8 @@ LLVM_VERSION=21
                                                                               mkdir ./output/include
 
                                                                               PREFIX="`pwd`/output"
-                                                                                      export PKG_CONFIG_PATH="${PREFIX}/lib/pkgconfig"
-                                                                                              export LIBRARY_PATH=$ {PREFIX}/lib
+                                                                                      export PKG_CONFIG_PATH=${PREFIX}/lib/pkgconfig
+                                                                                              export LIBRARY_PATH=${PREFIX}/lib
 #Work around Lame's broken shared build when linking with LLD.
 #export LDFLAGS="-Wl,--undefined-version"
                                                                                                       export CFLAGS="-fPIC"
@@ -59,10 +59,10 @@ LLVM_VERSION=21
 
 #lame
                                                                                                                               wget https://sourceforge.net/projects/lame/files/lame/${LAME_VERSION}/lame-${LAME_VERSION}.tar.gz
-                                                                                                                              tar -xpf lame-$ {LAME_VERSION}.tar.gz
-                                                                                                                              rm ./lame-$ {LAME_VERSION}.tar.gz
-                                                                                                                              cd lame-$ {LAME_VERSION}
-                                                                                                                              ./configure --prefix=$ {PREFIX} \
+                                                                                                                              tar -xpf lame-${LAME_VERSION}.tar.gz
+                                                                                                                              rm ./lame-${LAME_VERSION}.tar.gz
+                                                                                                                              cd lame-${LAME_VERSION}
+                                                                                                                              ./configure --prefix=${PREFIX} \
                                                                                                                                       --disable-shared \
                                                                                                                                       --enable-static \
                                                                                                                                       --enable-nasm \
@@ -72,73 +72,57 @@ LLVM_VERSION=21
                                                                                                                                       make -j `nproc`
                                                                                                                                       make install
                                                                                                                                       cd ..
-                                                                                                                                      rm -rf ./lame-$ {
-                                                                                                                                          LAME_VERSION
-                                                                                                                                      }
+                                                                                                                                      rm -rf ./lame-${LAME_VERSION}
 
 #ogg
                                                                                                                                       wget https://downloads.xiph.org/releases/ogg/libogg-${OGG_VERSION}.tar.gz
-                                                                                                                                      tar -xpf libogg-$ {OGG_VERSION}.tar.gz
-                                                                                                                                      rm ./libogg-$ {OGG_VERSION}.tar.gz
-                                                                                                                                      cd libogg-$ {OGG_VERSION}
+                                                                                                                                      tar -xpf libogg-${OGG_VERSION}.tar.gz
+                                                                                                                                      rm ./libogg-${OGG_VERSION}.tar.gz
+                                                                                                                                      cd libogg-${OGG_VERSION}
                                                                                                                                       ./configure \
-                                                                                                                                      --prefix=$ {
-                                                                                                                                                  PREFIX
-                                                                                                                                              } \
+                                                                                                                                      --prefix=${PREFIX} \
                                                                                                                                               --disable-shared \
                                                                                                                                               --enable-static
                                                                                                                                               make -j `nproc`
                                                                                                                                               make install
                                                                                                                                               cd ..
-                                                                                                                                              rm -rf ./libogg-$ {
-                                                                                                                                                  OGG_VERSION
-                                                                                                                                              }
+                                                                                                                                              rm -rf ./libogg-${OGG_VERSION}
 
 #Opus
                                                                                                                                               wget https://downloads.xiph.org/releases/opus/opus-${OPUS_VERSION}.tar.gz
-                                                                                                                                              tar -xpf opus-$ {OPUS_VERSION}.tar.gz
-                                                                                                                                              rm ./opus-$ {OPUS_VERSION}.tar.gz
-                                                                                                                                              cd opus-$ {OPUS_VERSION}
+                                                                                                                                              tar -xpf opus-${OPUS_VERSION}.tar.gz
+                                                                                                                                              rm ./opus-${OPUS_VERSION}.tar.gz
+                                                                                                                                              cd opus-${OPUS_VERSION}
                                                                                                                                               ./configure \
-                                                                                                                                              --prefix=$ {
-                                                                                                                                                          PREFIX
-                                                                                                                                                      } \
+                                                                                                                                              --prefix=${PREFIX} \
                                                                                                                                                       --disable-shared \
                                                                                                                                                       --enable-static
                                                                                                                                                       make -j `nproc`
                                                                                                                                                       make install
                                                                                                                                                       cd ..
-                                                                                                                                                      rm -rf ./opus-$ {
-                                                                                                                                                          OPUS_VERSION
-                                                                                                                                                      }
+                                                                                                                                                      rm -rf ./opus-${OPUS_VERSION}
 
 #Vorbis
                                                                                                                                                       wget https://downloads.xiph.org/releases/vorbis/libvorbis-${VORBIS_VERSION}.tar.gz
-                                                                                                                                                      tar -xpf libvorbis-$ {VORBIS_VERSION}.tar.gz
-                                                                                                                                                      rm -rf ./libvorbis-$ {VORBIS_VERSION}.tar.gz
-                                                                                                                                                      cd libvorbis-$ {VORBIS_VERSION}
+                                                                                                                                                      tar -xpf libvorbis-${VORBIS_VERSION}.tar.gz
+                                                                                                                                                      rm -rf ./libvorbis-${VORBIS_VERSION}.tar.gz
+                                                                                                                                                      cd libvorbis-${VORBIS_VERSION}
                                                                                                                                                       ./configure \
-                                                                                                                                                      --prefix=$ {
-                                                                                                                                                                  PREFIX
-                                                                                                                                                              } \
+                                                                                                                                                      --prefix=${PREFIX} \
                                                                                                                                                               --disable-shared \
                                                                                                                                                               --enable-static
                                                                                                                                                               make -j `nproc`
                                                                                                                                                               make install
                                                                                                                                                               cd ..
-                                                                                                                                                              rm -rf ./libvorbis-$ {
-                                                                                                                                                                  VORBIS_VERSION
-                                                                                                                                                              }
+                                                                                                                                                              rm -rf ./libvorbis-${VORBIS_VERSION}
 
 #Zlib
                                                                                                                                                               git clone https://github.com/madler/zlib
                                                                                                                                                               cd zlib
                                                                                                                                                               git fetch --tags
-                                                                                                                                                              git checkout v$ {ZLIB_VERSION}
+                                                                                                                                                              git checkout v${ZLIB_VERSION}
                                                                                                                                                               ./configure \
-                                                                                                                                                              --prefix=$ {
-                                                                                                                                                                          PREFIX
-                                                                                                                                                                      } \
+                                                                                                                                                              --prefix=${PREFIX} \
                                                                                                                                                                       --disable-shared \
                                                                                                                                                                       --enable-static
                                                                                                                                                                       make -j `nproc`
@@ -148,15 +132,11 @@ LLVM_VERSION=21
 
 #Libressl
                                                                                                                                                                       wget https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-${SSL_VERSION}.tar.gz
-                                                                                                                                                                      tar -xpf libressl-$ {
-                                                                                                                                                                          SSL_VERSION
-                                                                                                                                                                      } .tar.gz
-                                                                                                                                                                      rm ./libressl-$ {SSL_VERSION}.tar.gz
-                                                                                                                                                                      cd libressl-$ {SSL_VERSION}
+                                                                                                                                                                      tar -xpf libressl-${SSL_VERSION}.tar.gz
+                                                                                                                                                                      rm ./libressl-${SSL_VERSION}.tar.gz
+                                                                                                                                                                      cd libressl-${SSL_VERSION}
                                                                                                                                                                       ./configure \
-                                                                                                                                                                      --prefix=$ {
-                                                                                                                                                                                  PREFIX
-                                                                                                                                                                              } \
+                                                                                                                                                                      --prefix=${PREFIX} \
                                                                                                                                                                               --disable-shared \
                                                                                                                                                                               --enable-static
                                                                                                                                                                               make -j `nproc`
@@ -164,15 +144,11 @@ LLVM_VERSION=21
 
 #FFmpeg
                                                                                                                                                                               wget https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz
-                                                                                                                                                                              tar -xpf ffmpeg-$ {
-                                                                                                                                                                                  FFMPEG_VERSION
-                                                                                                                                                                              } .tar.xz
-                                                                                                                                                                              rm ./ffmpeg-$ {FFMPEG_VERSION}.tar.xz
-                                                                                                                                                                              cd ffmpeg-$ {FFMPEG_VERSION}
+                                                                                                                                                                              tar -xpf ffmpeg-${FFMPEG_VERSION}.tar.xz
+                                                                                                                                                                              rm ./ffmpeg-${FFMPEG_VERSION}.tar.xz
+                                                                                                                                                                              cd ffmpeg-${FFMPEG_VERSION}
                                                                                                                                                                               ./configure \
-                                                                                                                                                                              --prefix=$ {
-                                                                                                                                                                                          PREFIX
-                                                                                                                                                                                      } \
+                                                                                                                                                                              --prefix=${PREFIX} \
                                                                                                                                                                                       --disable-shared \
                                                                                                                                                                                       --enable-static \
                                                                                                                                                                                       --extra-ldflags="-L${PREFIX}/lib" \
@@ -191,7 +167,4 @@ LLVM_VERSION=21
                                                                                                                                                                                                               make -j `nproc`
                                                                                                                                                                                                               make install
                                                                                                                                                                                                               cd ..
-                                                                                                                                                                                                              rm -rf ./ffmpeg-$ {
-                                                                                                                                                                                                                  FFMPEG_VERSION
-                                                                                                                                                                                                              }
-
+                                                                                                                                                                                                              rm -rf ./ffmpeg-${FFMPEG_VERSION}
