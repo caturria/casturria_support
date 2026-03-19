@@ -1,0 +1,16 @@
+name: CI
+on: [push]
+
+jobs:
+  build:
+    name: run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the library
+        run: |
+          sudo apt update -y
+          sudo apt upgrade -y
+          bash ./bootstrap.sh
+          
+
