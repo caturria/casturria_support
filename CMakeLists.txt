@@ -1,6 +1,6 @@
 
 #CVC support layer
-#Installation bootstrap script
+#CMake build script
 #Copyright (C) 2026  Jordan Verner and contributors
 
 #This program is free software: you can redistribute it and/or modify
@@ -40,7 +40,7 @@ find_library(SWSCALE swscale REQUIRED)
 find_library(Z z REQUIRED)
 
 add_library(casturria_support SHARED
-            src/dummy.cpp
+            src/events.cpp
            )
 target_link_options(casturria_support PRIVATE
                     -fuse-ld=lld
