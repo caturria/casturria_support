@@ -17,6 +17,7 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #pragma once
+#include <stdint.h>
 
 extern "C"
 {
@@ -38,8 +39,98 @@ extern "C"
      */
     enum event_t
     {
+
+        /**
+         * Successfully opened a URL for decoding.
+         * Initialization may still fail if the file does not contain a decodable bitstream.
+         * details:
+         * decoder: arbitrary = the decoder that's being opened.
+         */
         EVENTTYPE_OPENED_INPUT = 0,
+
+        /**
+         * Failed to open a URL for decoding.
+         * This may follow an EVENTTYPE_OPENED_INPUT event if the URL turned out not to contain a decodable bitstream.
+         * Details:
+         * decoder: arbitrary = the decoder that was unable to be opened.
+         * error: string = the error returned via FFmpeg's av_strerror API.
+         */
         EVENTTYPE_FAILED_TO_OPEN_INPUT,
+
+        /**
+         * Found list of streams for the given file.
+         * Details:
+         * Decoder: arbitrary = the decoder being opened.
+         * Streams: int = the number of streams in the file.
+         */
+        EVENTTYPE_FOUND_STREAMS,
+
+        /**
+         * Failed to find any valid streams in the file.
+         * Details:
+         * Decoder: arbitrary = the decoder being opened.
+         */
+        EVENTTYPE_FAILED_TO_FIND_STREAMS,
+
+        /**
+         * Successfully identified a decodable audio stream.
+         * Details:
+         * Decoder: arbitrary = the decoder being opened.
+         * Stream: int = the stream index that has been selected.
+         * Codec: string = the full name of the audio codec being used.
+         */
+        EVENTTYPE_FOUND_BEST_STREAM,
+
+        /**
+         * Failed to find a decodable audio stream.
+         * Details:
+         * Decoder: arbitrary = the decoder being opened.
+         */
+        EVENTTYPE_FAILED_TO_FIND_BEST_STREAM,
+
+        /**
+         * Successfully initialized a codec for decoding.
+         * Details:
+         * Decoder: arbitrary = the decoder being initialized.
+         * Codec: string = the name of the codec being initialized.
+         */
+        EVENTTYPE_INITIALIZED_CODEC_DECODING,
+
+        /**
+         * Failed to initialize the required codec for the given URL.
+         * Details:
+         * Decoder: arbitrary = the decoder being initialized.
+         * Error: string = the string returned from av_strerror().
+         */
+        EVENTTYPE_FAILED_TO_INITIALIZE_CODEC_DECODING,
+
+        /**
+         * Successfully initialized the system (decoder-specific, non-configurable) filter graph.
+         * Details:
+         * Decoder: arbitrary = the decoder being initialized.
+         */
+        EVENTTYPE_INITIALIZED_FILTER_DECODING,
+
+        /**
+         * Failed to initialize the system (decoder-specific, non-configurable) filter graph.
+         * Details:
+         * Decoder: arbitrary = the decoder being initialized.
+         */
+        EVENTTYPE_FAILED_TO_INITIALIZE_FILTER_DECODING,
+
+        /**
+         * Out of memory.
+         * details: none
+         */
+        EVENTTYPE_OUT_OF_MEMORY,
+
+        /**
+         * An unexpected problem occurred during decoder setup or decoding.
+         * Details:
+         * Decoder: arbitrary = the decoder being initialized.
+         */
+        EVENTTYPE_BUG,
+
         EVENTTYPE_COUNT,
     };
 
@@ -77,11 +168,20 @@ extern "C"
     void casturria_registerEventCallback(EventHandler *pHandler, event_t event, EventCallback callback);
 
     /**
-     * Dispatches the given event to a callback registered on the given EventHandler.
-     * @param pHandler the EventHandler to dispatch the event to.
-     * @param event the type of event being dispatched.
-     * @param pDetails the specific details for this event.
-     * @note out of range values for event result in a no-op.
+     * Gets an event detail as a string.
+     * @param pDetails the EventDetails handle from which to fetch a detail.
+     * @param detail the index of the detail to retrieve.
+     * @warning Accessing an invalid detail (either the wrong type or out of range for the current event) is undefined behaviour.
+     * @note See the documentation for event_t to learn which details are carried by which events.
      */
-    void casturria_dispatchEvent(EventHandler *pHandler, event_t event, EventDetails *pDetails);
+    const char *casturria_getStringDetail(EventDetails *pDetails, uint8_t detail);
+
+    /**
+     * Gets an event detail as an integer.
+     * @param pDetails the EventDetails handle from which to fetch a detail.
+     * @param detail the index of the detail to retrieve.
+     * @warning Accessing an invalid detail (either the wrong type or out of range for the current event) is undefined behaviour.
+     * @note See the documentation for event_t to learn which details are carried by which events.
+     */
+    int32_t casturria_getIntDetail(EventDetails *pDetails, uint8_t detail);
 }

@@ -17,20 +17,8 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "events.h"
+#include "internal/events.h"
 #include <stdlib.h>
-const int MAX_EVENT_DETAILS = 3; // Increase as needed.
-
-struct EventDetails
-{
-    typedef union
-    {
-        const char *pStringDetail;
-        int intDetail;
-
-    } Detail;
-    Detail details[MAX_EVENT_DETAILS];
-};
 
 /**
  * An event callback which receives an event and does nothing with it.
@@ -67,11 +55,22 @@ void casturria_registerEventCallback(EventHandler *pHandler, event_t event, Even
     pHandler->events[event] = callback == nullptr ? noOpEventCallback : callback;
 }
 
-void casturria_dispatchEvent(EventHandler *pHandler, event_t event, EventDetails *pDetails)
+const char *casturria_getStringDetail(EventDetails *pDetails, uint8_t detail)
+{
+    return pDetails->details[detail].pStringDetail;
+}
+int32_t casturria_getIntDetail(EventDetails *pDetails, uint8_t detail)
+{
+    return pDetails->details[detail].intDetail;
+}
+namespace Event
+{
+void dispatch(EventHandler *pHandler, event_t event, EventDetails *pDetails)
 {
     if (event < 0 || event >= EVENTTYPE_COUNT)
     {
         return;
     }
     pHandler->events[event](event, pDetails);
+}
 }

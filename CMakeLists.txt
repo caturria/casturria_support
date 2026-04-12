@@ -40,11 +40,13 @@ find_library(SWSCALE swscale REQUIRED)
 find_library(Z z REQUIRED)
 
 add_library(casturria_support SHARED
+src/decoder.cpp
             src/events.cpp
            )
 target_link_options(casturria_support PRIVATE
                     -fuse-ld=lld
                              -Wl,--version-script=src/libcasturria_support.map
+                             -Wl,--no-undefined
                                      -static-libstdc++
                                      )
                                      target_link_libraries(casturria_support PRIVATE
