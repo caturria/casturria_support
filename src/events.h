@@ -125,11 +125,52 @@ extern "C"
         EVENTTYPE_OUT_OF_MEMORY,
 
         /**
-         * An unexpected problem occurred during decoder setup or decoding.
+         * An unexpected problem occurred during decoder setup or decoding that shouldn't be possible.
          * Details:
          * Decoder: arbitrary = the decoder being initialized.
          */
-        EVENTTYPE_BUG,
+        EVENTTYPE_DECODE_BUG,
+
+        /**
+         * An error occurred while demuxing.
+         * Typical reasons include I/O errors and corrupted streams.
+         * Details:
+         * Decoder: arbitrary = the decoder being decoded from.
+         * Error: string = the error returned via FFmpeg's av_strerror API.
+         */
+        EVENTTYPE_DEMUX_ERROR,
+
+        /**
+         * An error occurred while decoding.
+         * Likely indicates a corrupted bitstream, otherwise a software bug.
+         * Details:
+         * Decoder: arbitrary = the decoder being decoded from.
+         * Error: string = the error returned via FFmpeg's av_strerror API.
+         */
+        EVENTTYPE_DECODE_ERROR,
+
+        /**
+         * An error occurred while filtering decoded output.
+         * Shouldn't happen short of a software bug as the system filter graph is non-configurable.
+         * Details:
+         * Decoder: arbitrary = the decoder being decoded from.
+         * Error: string = the error returned via FFmpeg's av_strerror API.
+         */
+        EVENTTYPE_DECODE_FILTER_ERROR,
+
+        /**
+         * Demuxing complete.
+         * Details:
+         * Decoder: arbitrary = the decoder being decoded from.
+         */
+        EVENTTYPE_DEMUX_COMPLETE,
+
+        /**
+         * Decoding complete.
+         * Details:
+         * Decoder: arbitrary = the decoder being decoded from.
+         */
+        EVENTTYPE_DECODE_COMPLETE,
 
         EVENTTYPE_COUNT,
     };
