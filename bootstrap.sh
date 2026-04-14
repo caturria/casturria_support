@@ -158,6 +158,9 @@ cd ffmpeg-${FFMPEG_VERSION}
 --disable-devices \
 --disable-programs \
 --disable-asm \
+--disable-swscale \
+--disable-lzma \
+--disable-bzlib \
 --enable-libmp3lame \
 --enable-libopus \
 --enable-libvorbis \

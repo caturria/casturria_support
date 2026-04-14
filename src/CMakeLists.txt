@@ -30,7 +30,6 @@ find_library(AVCODEC avcodec REQUIRED)
 find_library(AVFILTER avfilter REQUIRED)
 find_library(AVUTIL avutil REQUIRED)
 find_library(SWRESAMPLE swresample REQUIRED)
-find_library(SWSCALE swscale REQUIRED)
 find_library(Z z REQUIRED)
 
 add_library(casturria_support SHARED
@@ -45,7 +44,6 @@ target_link_options(casturria_support PRIVATE
                                      -static-libstdc++
                                      )
                                      target_link_libraries(casturria_support PRIVATE
-                                     ${SWSCALE}
 ${AVFORMAT}
 ${AVCODEC}
 ${SWRESAMPLE}
