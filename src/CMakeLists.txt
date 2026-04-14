@@ -63,7 +63,6 @@ ${Z}
 simdjson
 
 )
-message(STATUS ${DEP_INCLUDE_DIR})
 target_include_directories(casturria_support PRIVATE
                            ${DEP_INCLUDE_DIR})
 install(TARGETS casturria_support)
