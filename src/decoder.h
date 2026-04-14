@@ -53,7 +53,7 @@ extern "C"
     /**
      * Requests a batch of audio frames from the decoder.
      * @param pDecoder the decoder handle to decode frames from.
-     * @param pOutput a pointer to a meory region that will receive the output.
+     * @param pOutput a pointer to a memory region that will receive the output.
      * @param count the number of frames to decode.
      * @returns number of frames actually decoded.
      * @note One frame equates to one sample per decoded channel, so 1024 frames would yield 2048 samples if the output is stereo.

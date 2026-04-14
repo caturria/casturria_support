@@ -41,6 +41,7 @@ find_library(Z z REQUIRED)
 
 add_library(casturria_support SHARED
 src/decoder.cpp
+src/encoder.cpp
             src/events.cpp
            )
 target_link_options(casturria_support PRIVATE
