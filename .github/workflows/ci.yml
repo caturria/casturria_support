@@ -3,10 +3,14 @@ on: [push]
 
 jobs:
   build:
-    name: run
+    name: Run
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout the code
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
       - name: Build dependencies
         run: |
           sudo apt update -y
@@ -14,10 +18,6 @@ jobs:
           bash ./bootstrap.sh
       - name: Build the library
         run: |
-          export CMAKE_PREFIX_PATH=`pwd`/build/output
-          export CMAKE_LIBRARY_PATH=`pwd`/build/output/lib
-          echo "Path is ${CMAKE_PREFIX_PATH}"
-          dir ${CMAKE_PREFIX_PATH}/include
-          cmake -DCMAKE_INSTALL_PREFIX=`pwd`/build/output .
+          cmake -DCMAKE_PREFIX_PATH=`pwd`/build/output -DCMAKE_LIBRARY_PATH=`pwd`/build/output/lib -DCMAKE_INSTALL_PREFIX=`pwd`/build/output .
           make
           make install
