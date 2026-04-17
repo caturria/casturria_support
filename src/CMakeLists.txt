@@ -1,5 +1,5 @@
 
-#CVC support layer
+#Casturria support layer
 #CMake build script
 #Copyright (C) 2026  Jordan Verner and contributors
 
@@ -36,6 +36,7 @@ add_library(casturria_support SHARED
 decoder.cpp
 encoder.cpp
             events.cpp
+            util.cpp
            )
 target_link_options(casturria_support PRIVATE
                     -fuse-ld=lld

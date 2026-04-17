@@ -1,5 +1,5 @@
 /**
-* CVC support layer
+* Casturria support layer
 * Audio decoding include
 * Copyright (C) 2026  Jordan Verner and contributors
 
@@ -30,8 +30,8 @@ extern "C"
      * A handle to an audio decoder.
      * @note Not threadsafe.
      */
-    struct Decoder;
-    typedef struct Decoder Decoder;
+    // struct AvCollection;
+    typedef struct AvCollection Decoder;
 
     /**
      * Opens a file for decoding.

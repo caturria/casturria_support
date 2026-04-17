@@ -1,5 +1,5 @@
 /**
-* CVC support layer
+* Casturria support layer
 * Audio encoding include
 * Copyright (C) 2026  Jordan Verner and contributors
 
@@ -28,16 +28,18 @@ extern "C"
      * A handle to an audio decoder.
      * @note Not threadsafe.
      */
-    struct Encoder;
-    typedef struct Encoder Encoder;
+    struct AvCollection;
+    typedef struct AvCollection Encoder;
 
     /**
      * Opens a file for encoding.
      * @param pURL any valid URL to an audio asset supported by FFmpeg.
      * @param pEventHandler a previously configured EventHandler instance.
-     * @param args a list of muxer and codec parameters in JSON format.
+     * @param inSampleRate the sample rate of the incoming audio.
+     * @param inChannels the channel count of the incoming audio.
+     * @param options a list of muxer and codec parameters in JSON format.
      */
-    Encoder *casturria_newEncoder(const char *pURL, EventHandler *pEventHandler, const char *pOptions);
+    Encoder *casturria_newEncoder(const char *pURL, EventHandler *pEventHandler, uint32_t inSampleRate, uint8_t inChannels, const char *pOptions);
 
     /**
      * Frees an encoder handle previously returned by casturria_newEncoder().
@@ -54,4 +56,10 @@ extern "C"
      * @note In case of failure, this function will dispatch events to the EventHandler previously supplied to casturria_newEncoder().
      */
     void casturria_encode(Encoder *pEncoder, const float *pInput, size_t count);
+
+    /**
+     * Call this function after successful encoding but before casturria_freeEncoder().
+     * @warning Failure to finalize an encoder results in a truncated file at best or an entirely unplayable one at worst.
+     */
+    void casturria_finalizeEncoder(Encoder *pEncoder);
 }

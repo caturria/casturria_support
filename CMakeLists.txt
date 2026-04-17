@@ -1,5 +1,5 @@
 
-#CVC support layer
+#Casturria support layer
 #CMake build script
 #Copyright (C) 2026  Jordan Verner and contributors
 

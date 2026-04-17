@@ -1,5 +1,5 @@
 /**
-* CVC support layer
+* Casturria support layer
 * Audio decoding implementation
 * Copyright (C) 2026  Jordan Verner and contributors
 
@@ -17,261 +17,15 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "decoder.h"
-#include "internal/events.h"
-#include <stdlib.h>
-#include <string>
-#include <sstream>
-#include <format>
-extern "C"
-{
-#include <libavformat/avformat.h>
-#include <libavcodec/avcodec.h>
-#include <libavfilter/avfilter.h>
-#include <libavfilter/buffersrc.h>
-#include <libavfilter/buffersink.h>
-#include <libavutil/opt.h>
-}
-
-/**
- * A common representation of an FFmpeg error event.
- */
-struct AvErrorEvent
-{
-    EventDetails details;
-    std::string description;
-};
-
-struct Decoder
-{
-    EventHandler *pEventHandler;     // Does not own.
-    AVFormatContext *pFormatContext; // Handles demuxing.
-    AVCodecContext *pCodecContext;
-    AVPacket *pPacket;
-    AVFrame *pFrame;
-    AVFilterGraph *pFilterGraph;
-    AVFilterContext *pFilterGraphIn, *pFilterGraphOut; // abuffer and abuffersink. They belong to the filter graph.
-    int stream;                                        // The audio stream chosen by av_find_best_stream().
-    size_t framesLeftInBatch;                          // Number of audio frames remaining in current FFmpeg output frame.
-};
-
-/**
- * Internal: Handles a Libav* error via the event system.
- * @param pDecoder the decoder that produced the event.
- * @param event the event type being triggered.
- * @param err the Libav* error code to get a description of.
- */
-static void handleAvError(Decoder *pDecoder, event_t event, int err)
-{
-    AvErrorEvent e;
-    e.description.resize(AV_ERROR_MAX_STRING_SIZE);
-    av_strerror(err, e.description.data(), AV_ERROR_MAX_STRING_SIZE);
-    e.details.details[0].pArbitraryDetail = pDecoder;
-    e.details.details[1].pStringDetail = e.description.c_str();
-    Event::dispatch(pDecoder->pEventHandler, event, &e.details);
-}
-
-/**
- * Internal: frees the given decoder and returns a null pointer.
- * Used to reduce verbosity of error handling in decoder setup.
- * @param pDecoder the decoder to free.
- */
-static Decoder *fail(Decoder *pDecoder)
-{
-    casturria_freeDecoder(pDecoder);
-    return nullptr;
-}
-
-/**
- * Internal: get a channel layout description as a C++ string.
- * @param pLayout the channel layout to describe.
- */
-static std::string getChannelLayoutDescription(AVChannelLayout *pLayout)
-{
-    std::string description;
-    // Did I just miss it? Is there really no way to know in advance what the max length of a channel layout description is?
-    int size = 32; // Should be enough. If not this loops twice.
-    while (true)
-    {
-        description.resize(size);
-        int result = av_channel_layout_describe(pLayout, description.data(), size);
-        if (result < 0)
-        {
-            return "";
-        }
-        if (result > size)
-        {
-            size = result;
-            continue;
-        }
-        break;
-    }
-    return description;
-}
-
-/**
- * Overload that gets the default layout description for a given channel count.
- * @param channels the channel count to get a description of.
- */
-static std::string getChannelLayoutDescription(uint8_t channels)
-{
-    AVChannelLayout layout;
-    av_channel_layout_default(&layout, channels);
-    return getChannelLayoutDescription(&layout);
-}
-
-/**
- * Internal: generates abuffer arguments for the given decoder.
- * @param pCodecContext a fully configured and opened AVCodecContext.
- * @returns std::string containing a filtergraph description on success or an empty string on failure.
- */
-static std::string getAbufferArgs(AVCodecContext *pCodecContext)
-{
-    return std::format("sample_rate={}:sample_fmt={}:channel_layout={}",
-                       pCodecContext->sample_rate,
-                       av_get_sample_fmt_name(pCodecContext->sample_fmt),
-                       getChannelLayoutDescription(&pCodecContext->ch_layout));
-}
-
-/**
- * Internal: generates abuffersink args for the given output parameters.
- * @param channels the output channel count.
- */
-std::string getAbuffersinkArgs(uint8_t channels)
-{
-    return std::format("channel_layouts={}",
-                       getChannelLayoutDescription(channels));
-}
-
-/**
- * Generates a filtergraph description for the given decoder.
- * @param pCodecContext a fully configured and opened AVCodecContext.
- * @param sampleRate the desired output sample rate.
- * @param channels the desired output channels.
- * @returns std::string containing a filtergraph description on success or an empty string on failure.
- */
-static std::string getSystemFiltergraphDescription(AVCodecContext *pCodecContext, uint32_t sampleRate, uint8_t channels)
-{
-    return std::format("aformat=sample_fmts=flt:sample_rates={}:channel_layouts={}",
-                       sampleRate,
-                       getChannelLayoutDescription(channels));
-}
-
-/**
- * Internal: builds the system (non-configurable) filter graph for a decoder.
- * @param pDecoder the decoder to process.
- * @param sampleRate the sample rate to decode to.
- * @param channels the number of channels to decode to.
- */
-static bool buildSystemFilterGraph(Decoder *pDecoder, uint32_t sampleRate, uint8_t channels)
-{
-    EventDetails details;
-    details.details[0].pArbitraryDetail = pDecoder;
-    auto pEventHandler = pDecoder->pEventHandler;
-    pDecoder->pFilterGraph = avfilter_graph_alloc();
-    if (pDecoder->pFilterGraph == nullptr)
-    {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
-        return fail(pDecoder);
-    }
-    auto filters = getSystemFiltergraphDescription(pDecoder->pCodecContext, sampleRate, channels);
-    AVFilterInOut *pInputList, *pOutputList;
-    int result = avfilter_graph_parse2(pDecoder->pFilterGraph, filters.c_str(), &pInputList, &pOutputList);
-    if (result < 0)
-    {
-        handleAvError(pDecoder, EVENTTYPE_DECODE_FILTER_ERROR, result);
-        return false;
-    }
-    // There should be exactly one input and exactly one output.
-    // Attempt to extract the filters from the lists, then free the lists, then make sure we have the filters we expect.
-    auto pInput = pInputList == nullptr ? nullptr : pInputList->filter_ctx;
-    auto pOutput = pOutputList == nullptr ? nullptr : pOutputList->filter_ctx;
-    if (pInputList != nullptr)
-    {
-        avfilter_inout_free(&pInputList);
-    }
-    if (pOutputList != nullptr)
-    {
-        avfilter_inout_free(&pOutputList);
-    }
-    if (pInput == nullptr || pOutput == nullptr)
-    {
-        Event::dispatch(pEventHandler, EVENTTYPE_DECODE_BUG, &details);
-        return false;
-    }
-
-    auto pFilter = avfilter_get_by_name("abuffer");
-    if (pFilter == nullptr)
-    {
-        // Only a broken FFmpeg build or wild bug can get here.
-        Event::dispatch(pEventHandler, EVENTTYPE_DECODE_BUG, &details);
-    }
-    auto bufferArgs = getAbufferArgs(pDecoder->pCodecContext);
-    result = avfilter_graph_create_filter(&pDecoder->pFilterGraphIn, pFilter, "in", bufferArgs.c_str(), nullptr, pDecoder->pFilterGraph);
-    if (result < 0)
-    {
-        handleAvError(pDecoder, EVENTTYPE_DECODE_FILTER_ERROR, result);
-    }
-    auto pFilterGraphIn = pDecoder->pFilterGraphIn;
-    result = avfilter_link(pFilterGraphIn, 0, pInput, 0);
-    if (result < 0)
-    {
-        handleAvError(pDecoder, EVENTTYPE_DECODE_FILTER_ERROR, result);
-        return false;
-    }
-    pFilter = avfilter_get_by_name("abuffersink");
-    if (pFilter == nullptr)
-    {
-        Event::dispatch(pEventHandler, EVENTTYPE_DECODE_BUG, &details);
-        return false;
-    }
-    result = avfilter_graph_create_filter(&pDecoder->pFilterGraphOut, pFilter, nullptr, getAbuffersinkArgs(channels).c_str(), nullptr, pDecoder->pFilterGraph);
-    if (result < 0)
-    {
-        handleAvError(pDecoder, EVENTTYPE_DECODE_FILTER_ERROR, result);
-        return false;
-    }
-    auto pFilterGraphOut = pDecoder->pFilterGraphOut;
-    result = avfilter_link(pOutput, 0, pDecoder->pFilterGraphOut, 0);
-    if (result < 0)
-    {
-        handleAvError(pDecoder, EVENTTYPE_DECODE_FILTER_ERROR, result);
-        return false;
-    }
-    result = avfilter_graph_config(pDecoder->pFilterGraph, nullptr);
-    if (result < 0)
-    {
-        handleAvError(pDecoder, EVENTTYPE_DECODE_FILTER_ERROR, result);
-        return false;
-    }
-
-    return true;
-}
+#include "internal/util.h"
 
 Decoder *casturria_newDecoder(const char *pURL, EventHandler *pEventHandler, uint32_t sampleRate, uint8_t channels)
 {
-    auto pDecoder = (Decoder *)malloc(sizeof(Decoder));
+    auto pDecoder = newAvCollection(pEventHandler);
     if (pDecoder == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
-        return nullptr;
+        return nullptr; // Event handling will already be done.
     }
-    memset(pDecoder, 0, sizeof(Decoder));
-
-    pDecoder->pPacket = av_packet_alloc();
-    if (pDecoder->pPacket == nullptr)
-    {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
-        return fail(pDecoder);
-    }
-
-    pDecoder->pFrame = av_frame_alloc();
-    if (pDecoder->pFrame == nullptr)
-    {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
-        return fail(pDecoder);
-    }
-
-    pDecoder->pEventHandler = pEventHandler;
     // The EventDetails can be reused usually by changing just one field.
     EventDetails details;
     details.details[0].pArbitraryDetail = pDecoder;
@@ -279,9 +33,10 @@ Decoder *casturria_newDecoder(const char *pURL, EventHandler *pEventHandler, uin
     int result = avformat_open_input(&pDecoder->pFormatContext, pURL, nullptr, nullptr);
     if (result < 0)
     {
-        handleAvError(pDecoder, EVENTTYPE_FAILED_TO_OPEN_INPUT, result);
+        handleAvError(pDecoder, EVENTTYPE_DECODE_FAILED_TO_OPEN_INPUT, result);
         return fail(pDecoder);
     }
+    Event::dispatch(pEventHandler, EVENTTYPE_DECODE_OPENED_INPUT, &details);
 
     auto pFormatContext = pDecoder->pFormatContext;
     result = avformat_find_stream_info(pFormatContext, nullptr);
@@ -314,61 +69,45 @@ Decoder *casturria_newDecoder(const char *pURL, EventHandler *pEventHandler, uin
         Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
         return fail(pDecoder);
     }
+    details.details[1].pStringDetail = pCodec->long_name;
+    Event::dispatch(pEventHandler, EVENTTYPE_DECODE_ALLOCATED_CODEC, &details);
 
     auto pCodecContext = pDecoder->pCodecContext;
     result = avcodec_parameters_to_context(pCodecContext, pFormatContext->streams[stream]->codecpar);
     if (result < 0)
     {
-        handleAvError(pDecoder, EVENTTYPE_FAILED_TO_INITIALIZE_CODEC_DECODING, result);
+        handleAvError(pDecoder, EVENTTYPE_DECODE_FAILED_TO_CONFIGURE_CODEC, result);
         return fail(pDecoder);
     }
+    details.details[1].pStringDetail = pCodec->long_name;
+    Event::dispatch(pEventHandler, EVENTTYPE_DECODE_CONFIGURED_CODEC, &details);
+
+    // At this point we finally know the details of the input file, needed for the upcoming filter configuration step.
+    pDecoder->inSampleRate = pCodecContext->sample_rate;
+    pDecoder->outSampleRate = sampleRate;
+    pDecoder->inChannelLayout = pCodecContext->ch_layout;
+    av_channel_layout_default(&pDecoder->outChannelLayout, channels);
 
     result = avcodec_open2(pCodecContext, pCodec, nullptr);
     if (result < 0)
     {
-        handleAvError(pDecoder, EVENTTYPE_FAILED_TO_INITIALIZE_CODEC_DECODING, result);
+        handleAvError(pDecoder, EVENTTYPE_DECODE_FAILED_TO_INITIALIZE_CODEC, result);
         return fail(pDecoder);
     }
     // Finally report successful decoder initialization.
     details.details[1].pStringDetail = pCodec->long_name;
-    Event::dispatch(pEventHandler, EVENTTYPE_INITIALIZED_CODEC_DECODING, &details);
-    if (!buildSystemFilterGraph(pDecoder, sampleRate, channels))
-    {
-        fail(pDecoder);
-    }
+    Event::dispatch(pEventHandler, EVENTTYPE_DECODE_INITIALIZED_CODEC, &details);
 
-    Event::dispatch(pEventHandler, EVENTTYPE_INITIALIZED_FILTER_DECODING, &details);
-    // abort();
+    if (!buildSystemFilterGraph(pDecoder))
+    {
+        return fail(pDecoder);
+    }
 
     return pDecoder;
 }
 void casturria_freeDecoder(Decoder *pDecoder)
 {
-    if (pDecoder == nullptr)
-    {
-        return;
-    }
-    if (pDecoder->pFrame != nullptr)
-    {
-        av_frame_free(&pDecoder->pFrame);
-    }
-    if (pDecoder->pPacket != nullptr)
-    {
-        av_packet_free(&pDecoder->pPacket);
-    }
-    if (pDecoder->pFilterGraph != nullptr)
-    {
-        avfilter_graph_free(&pDecoder->pFilterGraph);
-    }
-    if (pDecoder->pCodecContext != nullptr)
-    {
-        avcodec_free_context(&pDecoder->pCodecContext);
-    }
-    if (pDecoder->pFormatContext != nullptr)
-    {
-        avformat_close_input(&pDecoder->pFormatContext);
-    }
-    free(pDecoder);
+    freeAvCollection(pDecoder);
 }
 
 /**
@@ -449,7 +188,7 @@ static bool processFrame(Decoder *pDecoder)
         av_frame_unref(pDecoder->pFrame);
         if (result < 0)
         {
-            handleAvError(pDecoder, EVENTTYPE_DECODE_FILTER_ERROR, result);
+            handleAvError(pDecoder, EVENTTYPE_FILTER_ERROR, result);
             return false;
         }
         return true;
@@ -489,7 +228,7 @@ static bool prepareNextFrame(Decoder *pDecoder)
         auto pFrame = pDecoder->pFrame;
         if (pFrame->format != AV_SAMPLE_FMT_FLT)
         {
-            Event::dispatch(pDecoder->pEventHandler, EVENTTYPE_DECODE_BUG, &details);
+            Event::dispatch(pDecoder->pEventHandler, EVENTTYPE_BUG, &details);
         }
         pDecoder->framesLeftInBatch = pFrame->nb_samples;
         return true;
