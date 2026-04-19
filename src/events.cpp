@@ -24,7 +24,7 @@
  * An event callback which receives an event and does nothing with it.
  * All event callbacks are initialized to this by default.
  */
-static void noOpEventCallback(event_t event, EventDetails *pDetails)
+static void noOpEventCallback(uint32_t event, EventDetails *pDetails)
 {
 }
 
@@ -50,8 +50,12 @@ void casturria_freeEventHandler(EventHandler *pHandler)
 {
     free(pHandler);
 }
-void casturria_registerEventCallback(EventHandler *pHandler, event_t event, EventCallback callback)
+void casturria_registerEventCallback(EventHandler *pHandler, uint32_t event, EventCallback callback)
 {
+    if (event >= EVENTTYPE_COUNT)
+    {
+        return;
+    }
     pHandler->events[event] = callback == nullptr ? noOpEventCallback : callback;
 }
 
@@ -65,12 +69,12 @@ int32_t casturria_getIntDetail(EventDetails *pDetails, uint8_t detail)
 }
 namespace Event
 {
-void dispatch(EventHandler *pHandler, event_t event, EventDetails *pDetails)
-{
-    if (event < 0 || event >= EVENTTYPE_COUNT)
+    void dispatch(EventHandler *pHandler, event_t event, EventDetails *pDetails)
     {
-        return;
+        if (event < 0 || event >= EVENTTYPE_COUNT)
+        {
+            return;
+        }
+        pHandler->events[event](event, pDetails);
     }
-    pHandler->events[event](event, pDetails);
-}
 }

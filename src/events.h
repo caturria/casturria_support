@@ -661,7 +661,7 @@ extern "C"
      * @param eventType the type of the received event.
      * @param pDetails the details of the event. Contains information such as the name of the file that was opened.
      */
-    typedef void (*EventCallback)(event_t event, EventDetails *pDetails);
+    typedef void (*EventCallback)(uint32_t event, EventDetails *pDetails);
 
     /**
      * Creates a new EventHandler.
@@ -686,7 +686,7 @@ extern "C"
      * @param event the event to register the callback to.
      * @param callback the callback to register.
      */
-    void casturria_registerEventCallback(EventHandler *pHandler, event_t event, EventCallback callback);
+    void casturria_registerEventCallback(EventHandler *pHandler, uint32_t event, EventCallback callback);
 
     /**
      * Gets an event detail as a string.
