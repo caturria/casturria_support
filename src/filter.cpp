@@ -319,11 +319,11 @@ void casturria_freeFilterGraph(FilterGraph *pFilterGraph)
     }
     free(pFilterGraph);
 }
-size_t casturria_getFilterGraphInputs(FilterGraph *pFilterGraph)
+size_t casturria_getFilterGraphInputs(const FilterGraph *pFilterGraph)
 {
     return pFilterGraph->inputCount;
 }
-size_t casturria_getFilterGraphOutputs(FilterGraph *pFilterGraph)
+size_t casturria_getFilterGraphOutputs(const FilterGraph *pFilterGraph)
 {
     return pFilterGraph->outputCount;
 }
