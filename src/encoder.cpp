@@ -382,7 +382,7 @@ static bool ingest(Encoder *pEncoder, const float *pInput, size_t count)
     av_frame_unref(pFrame);
     if (result < 0)
     {
-        handleAvError(pEncoder, EVENTTYPE_FILTER_ERROR, result);
+        handleAvError(pEncoder, EVENTTYPE_SYSTEM_FILTER_ERROR, result);
         return false;
     }
     return true;
@@ -431,7 +431,7 @@ static bool sendFramesToEncoder(Encoder *pEncoder)
         // Ideally we'd use the asetnsamples filter here for codecs that require specific frame sizes. But it's bugged as of April 2026 and produces frames that are smaller than they're supposed to be.
         if (pCodecContext->frame_size == 0)
         {
-            result = av_buffersink_get_frame(pEncoder->pFilterGraphIn, pEncoder->pFrame);
+            result = av_buffersink_get_frame(pEncoder->pFilterGraphOut, pEncoder->pFrame);
         }
         else
         {
@@ -480,7 +480,7 @@ void casturria_finalizeEncoder(Encoder *pEncoder)
     int result = av_buffersrc_add_frame(pEncoder->pFilterGraphIn, nullptr);
     if (result < 0)
     {
-        handleAvError(pEncoder, EVENTTYPE_FILTER_ERROR, result);
+        handleAvError(pEncoder, EVENTTYPE_SYSTEM_FILTER_ERROR, result);
         return;
     }
     // The encoder will detect the EOF state from the filter and perform its own draining stage.

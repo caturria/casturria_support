@@ -43,8 +43,8 @@ extern "C"
         /**
          * Successfully opened a URL for decoding.
          * Initialization may still fail if the file does not contain a decodable bitstream.
-         * details:
-         * decoder: arbitrary = the decoder that's being opened.
+         * Details:
+         * Decoder: arbitrary = the decoder that's being opened.
          */
         EVENTTYPE_DECODE_OPENED_INPUT = 0,
 
@@ -52,8 +52,8 @@ extern "C"
          * Failed to open a URL for decoding.
          * This may follow an EVENTTYPE_OPENED_INPUT event if the URL turned out not to contain a decodable bitstream.
          * Details:
-         * decoder: arbitrary = the decoder that was unable to be opened.
-         * error: string = the error returned via FFmpeg's av_strerror API.
+         * Decoder: arbitrary = the decoder that was unable to be opened.
+         * Error: string = the error returned via FFmpeg's av_strerror API.
          */
         EVENTTYPE_DECODE_FAILED_TO_OPEN_INPUT,
 
@@ -242,7 +242,7 @@ extern "C"
 
         /**
          * Out of memory.
-         * details: none
+         * Details: none
          */
         EVENTTYPE_OUT_OF_MEMORY,
 
@@ -258,7 +258,7 @@ extern "C"
          * Typical reasons include I/O errors and corrupted streams.
          * Details:
          * Decoder: arbitrary = the decoder being decoded from.
-         * Error: string = the error returned via FFmpeg's av_strerror API.
+         * Details: string = the error returned via FFmpeg's av_strerror API.
          */
         EVENTTYPE_DEMUX_ERROR,
 
@@ -267,18 +267,18 @@ extern "C"
          * Likely indicates a corrupted bitstream, otherwise a software bug.
          * Details:
          * Decoder: arbitrary = the decoder being decoded from.
-         * Error: string = the error returned via FFmpeg's av_strerror API.
+         * Details: string = the error returned via FFmpeg's av_strerror API.
          */
         EVENTTYPE_DECODE_ERROR,
 
         /**
-         * An error occurred while filtering input or output.
+         * An error occurred while filtering input or output through the system filter graph.
          * Shouldn't happen short of a software bug as the system filter graph is non-configurable.
          * Details:
          * Collection: arbitrary = the AvCollection being encoded to or decoded from.
-         * Error: string = the error returned via FFmpeg's av_strerror API.
+         * Details: string = the error returned via FFmpeg's av_strerror API.
          */
-        EVENTTYPE_FILTER_ERROR,
+        EVENTTYPE_SYSTEM_FILTER_ERROR,
 
         /**
          * Demuxing complete.
@@ -293,8 +293,6 @@ extern "C"
          * Decoder: arbitrary = the decoder being decoded from.
          */
         EVENTTYPE_DECODE_COMPLETE,
-
-        /** */
 
         /**
          * Successfully allocated output format context.
@@ -493,6 +491,166 @@ extern "C"
          * Details: string = the error message returned via FFmpeg's av_strerror API.
          */
         EVENTTYPE_OUTPUT_ERROR,
+
+        /**
+         * Successfully parsed a standalone (application-defined) filter graph.
+         * Details:
+         * Graph: arbitrary = the FilterGraph being configured.
+         * Filters: string = the filter graph that was parsed.
+         */
+        EVENTTYPE_PARSED_APPLICATION_FILTER_GRAPH,
+
+        /**
+         * Failed to parse a standalone (application-defined) filter graph.
+         * Details:
+         * Collection: arbitrary = the AvCollection being configured.
+         * Details: string = the error message returned from FFmpeg's av_strerror API.
+         */
+        EVENTTYPE_FAILED_TO_PARSE_APPLICATION_FILTER_GRAPH,
+
+        /**
+         * Successfully initialized an input buffer for a standalone(application-configured) filter graph.
+         * @note One of these will fire per loose graph input.
+         * Details:
+         * Filter: arbitrary = the filter graph being configured.
+         * Name: string = the name of the input whose buffer was initialized.
+         * Pad: int = the input pad number it's being connected to.
+         */
+        EVENTTYPE_INITIALIZED_APPLICATION_ABUFFER,
+
+        /**
+         * Failed to initialize an input buffer for a standalone (application-configured) filter graph.
+         * Details:
+         * Graph: arbitrary = the filter graph being configured.
+         * Details: string = the string returned via FFmpeg's av_strerror() API.
+         */
+        EVENTTYPE_FAILED_TO_INITIALIZE_APPLICATION_ABUFFER,
+
+        /**
+         * Successfully linked an input buffer to a standalone (application-created) filter.
+         * @note One of these will fire per loose filter.
+         * Details:
+         * Graph: arbitrary = the filter graph being configured.
+         * Name: string = the filter name.
+         * Pad: int = the input pad.
+         */
+        EVENTTYPE_LINKED_APPLICATION_ABUFFER,
+
+        /**
+         * Failed to link an input buffer to a standalone (application-created) filter.
+         * Details:
+         * Graph: arbitrary = the filter graph being configured.
+         * Details: string = the error message returned via FFmpeg's av_strerror() API.
+         */
+        EVENTTYPE_FAILED_TO_LINK_APPLICATION_ABUFFER,
+
+        /**
+         * Successfully initialized a format converter for a standalone (application-created) filter.
+         * @note One of these will fire per loose filter.
+         * Details:
+         * Graph: arbitrary = the filter graph being configured.
+         * Name: string = the filter name.
+         * Pad: int = the input pad.
+         */
+        EVENTTYPE_INITIALIZED_APPLICATION_AFORMAT,
+
+        /**
+         * Failed to initialize a format converter for a standalone (application-created) filter.
+         * Details:
+         * Graph: arbitrary = the filter graph being configured.
+         * Details: string = the error message returned via FFmpeg's av_strerror() API.
+         */
+        EVENTTYPE_FAILED_TO_INITIALIZE_APPLICATION_AFORMAT,
+
+        /**
+         * Successfully linked a format converter to a standalone (application-created) filter.
+         * @note One of these will fire per loose filter.
+         * Details:
+         * Graph: arbitrary = the filter graph being configured.
+         * Name: string = the filter name.
+         * Pad: int = the input pad.
+         */
+        EVENTTYPE_LINKED_APPLICATION_AFORMAT,
+
+        /**
+         * Failed to link a format converter to a standalone (application-created) filter.
+         * Details:
+         * Graph: arbitrary = the filter graph being configured.
+         * Details: string = the error message returned via FFmpeg's av_strerror() API.
+         */
+        EVENTTYPE_FAILED_TO_LINK_APPLICATION_AFORMAT,
+
+        /**
+         * Successfully initialized an output buffer for a standalone (application-created) filter.
+         * @note One of these will fire per loose filter.
+         * Details:
+         * Graph: arbitrary = the filter graph being configured.
+         * Name: string = the filter name.
+         * Pad: int = the input pad.
+         */
+        EVENTTYPE_INITIALIZED_APPLICATION_ABUFFERSINK,
+
+        /**
+         * Failed to initialize an output buffer for a standalone (application-created) filter.
+         * Details:
+         * Graph: arbitrary = the filter graph being configured.
+         * Details: string = the error message returned via FFmpeg's av_strerror() API.
+         */
+        EVENTTYPE_FAILED_TO_INITIALIZE_APPLICATION_ABUFFERSINK,
+
+        /**
+         * Successfully linked an output buffer to a standalone (application-created) filter.
+         * @note One of these will fire per loose filter.
+         * Details:
+         * Graph: arbitrary = the filter graph being configured.
+         * Name: string = the filter name.
+         * Pad: int = the input pad.
+         */
+        EVENTTYPE_LINKED_APPLICATION_ABUFFERSINK,
+
+        /**
+         * Failed to link an output buffer to a standalone (application-created) filter.
+         * Details:
+         * Graph: arbitrary = the filter graph being configured.
+         * Details: string = the error message returned via FFmpeg's av_strerror() API.
+         */
+        EVENTTYPE_FAILED_TO_LINK_APPLICATION_ABUFFERSINK,
+
+        /**
+         * Successfully configured a standalone (application-created) filter graph.
+         * Details:
+         * Graph: arbitrary = the filter graph that was configured.
+         */
+        EVENTTYPE_CONFIGURED_APPLICATION_FILTER_GRAPH,
+
+        /**
+         * Failed to configure an application-created filter graph.
+         * Details:
+         * Graph: arbitrary = the filter graph that failed to be configured.
+         */
+        EVENTTYPE_FAILED_TO_CONFIGURE_APPLICATION_FILTER_GRAPH,
+
+        /**
+         * Failed to allocate frame buffers for an application-created filter graph.
+         * Details:
+         * Graph: arbitrary = the filter graph being used.
+         */
+        EVENTTYPE_FILTER_FAILED_TO_ALLOCATE_FRAME_BUFFER,
+
+        /**
+         * An error occurred while filtering input or output through an application-created filter graph.
+         * Details:
+         * Graph: arbitrary = the filter graph being used.
+         * Details: string = the string returned via FFmpeg's av_strerror() API.
+         */
+        EVENTTYPE_APPLICATION_FILTER_ERROR,
+
+        /**
+         * Reached EOF on an application-created filter graph.
+         * Details:
+         * Graph: arbitrary = the filter graph being used.
+         */
+        EVENTTYPE_FILTER_GRAPH_EOF,
 
         EVENTTYPE_COUNT,
     };

@@ -35,13 +35,21 @@ extern "C"
 }
 
 /**
+ * Denotes any structure whose first member is an EventHandler.
+ */
+struct EventEmitter
+{
+    EventHandler *pEventHandler;
+};
+
+/**
  * A container for the many objects needed for FFmpeg encoding and decoding.
  * Aliased as Encoder and Decoder for the purposes of the public API.
  */
 
 struct AvCollection
 {
-    EventHandler *pEventHandler;     // Does not own.
+    EventHandler *pEventHandler;     // Does not own. Must always be the first member.
     AVFormatContext *pFormatContext; // Handles muxing/ demuxing.
     AVIOContext *pIOContext;         // I/O for encoding.
     AVCodecContext *pCodecContext;
@@ -68,11 +76,11 @@ AvCollection *newAvCollection(EventHandler *pEventHandler);
 
 /**
  * Internal: Handles a Libav* error via the event system.
- * @param pDecoder the decoder that produced the event.
+ * @param pArbitrary the entity (Decoder, Encoder, FilterGraph...) that produced the event.
  * @param event the event type being triggered.
  * @param err the Libav* error code to get a description of.
  */
-void handleAvError(AvCollection *pCollection, event_t event, int err);
+void handleAvError(void *pArbitrary, event_t event, int err);
 
 /**
  * Internal: frees an AvCollection (either an encoder or decoder).

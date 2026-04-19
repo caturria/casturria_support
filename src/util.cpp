@@ -55,14 +55,15 @@ AvCollection *newAvCollection(EventHandler *pEventHandler)
     return pCollection;
 }
 
-void handleAvError(AvCollection *pCollection, event_t event, int err)
+void handleAvError(void *pArbitrary, event_t event, int err)
 {
+    auto pEventHandler = ((EventEmitter *)pArbitrary)->pEventHandler;
     AvErrorEvent e;
     e.description.resize(AV_ERROR_MAX_STRING_SIZE);
     av_strerror(err, e.description.data(), AV_ERROR_MAX_STRING_SIZE);
-    e.details.details[0].pArbitraryDetail = pCollection;
+    e.details.details[0].pArbitraryDetail = pArbitrary;
     e.details.details[1].pStringDetail = e.description.c_str();
-    Event::dispatch(pCollection->pEventHandler, event, &e.details);
+    Event::dispatch(pEventHandler, event, &e.details);
 }
 
 void freeAvCollection(AvCollection *pCollection)

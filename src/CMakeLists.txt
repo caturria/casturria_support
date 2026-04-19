@@ -36,6 +36,7 @@ add_library(casturria_support SHARED
 decoder.cpp
 encoder.cpp
             events.cpp
+            filter.cpp
             util.cpp
            )
 target_link_options(casturria_support PRIVATE

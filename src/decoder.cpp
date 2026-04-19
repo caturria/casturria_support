@@ -188,7 +188,7 @@ static bool processFrame(Decoder *pDecoder)
         av_frame_unref(pDecoder->pFrame);
         if (result < 0)
         {
-            handleAvError(pDecoder, EVENTTYPE_FILTER_ERROR, result);
+            handleAvError(pDecoder, EVENTTYPE_SYSTEM_FILTER_ERROR, result);
             return false;
         }
         return true;
