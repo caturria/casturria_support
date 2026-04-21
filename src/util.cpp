@@ -27,40 +27,49 @@ struct AvErrorEvent
     std::string description;
 };
 
-AvCollection *newAvCollection(EventHandler *pEventHandler)
+AvCollection *newAvCollection(EventHandler *pEventHandler, EventCallback pCallback)
 {
+    EventDetails details;
+    details.pCallback = pCallback;
+
     auto pCollection = (AvCollection *)malloc(sizeof(AvCollection));
     if (pCollection == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
+        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
         return nullptr;
     }
     memset(pCollection, 0, sizeof(AvCollection));
 
+    details.details[0].pArbitraryDetail = pCollection;
+
+    pCollection->pEventHandler = pEventHandler;
+    pCollection->pCallback = pCallback;
+
     pCollection->pPacket = av_packet_alloc();
     if (pCollection->pPacket == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
+        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
         return fail(pCollection);
     }
 
     pCollection->pFrame = av_frame_alloc();
     if (pCollection->pFrame == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
+        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
         return fail(pCollection);
     }
 
-    pCollection->pEventHandler = pEventHandler;
     return pCollection;
 }
 
 void handleAvError(void *pArbitrary, event_t event, int err)
 {
-    auto pEventHandler = ((EventEmitter *)pArbitrary)->pEventHandler;
+    auto pEmitter = (EventEmitter *)pArbitrary;
+    auto pEventHandler = pEmitter->pEventHandler;
     AvErrorEvent e;
     e.description.resize(AV_ERROR_MAX_STRING_SIZE);
     av_strerror(err, e.description.data(), AV_ERROR_MAX_STRING_SIZE);
+    e.details.pCallback = pEmitter->pCallback;
     e.details.details[0].pArbitraryDetail = pArbitrary;
     e.details.details[1].pStringDetail = e.description.c_str();
     Event::dispatch(pEventHandler, event, &e.details);
@@ -184,12 +193,13 @@ static std::string getSystemFiltergraphDescription(AvCollection *pCollection)
                        getChannelLayoutDescription(&pCollection->outChannelLayout));
 }
 
-const AVFilter *findFilter(const char *pName, EventHandler *pEventHandler)
+const AVFilter *findFilter(const char *pName, EventHandler *pEventHandler, EventCallback pCallback)
 {
     auto pFilter = avfilter_get_by_name(pName);
     if (pFilter == nullptr)
     {
         EventDetails details;
+        details.pCallback = pCallback;
         details.details[0].pStringDetail = pName;
         Event::dispatch(pEventHandler, EVENTTYPE_LACKING_REQUIRED_FILTER, &details);
     }
@@ -199,12 +209,13 @@ const AVFilter *findFilter(const char *pName, EventHandler *pEventHandler)
 bool buildSystemFilterGraph(AvCollection *pCollection)
 {
     EventDetails details;
+    details.pCallback = pCollection->pCallback;
     details.details[0].pArbitraryDetail = pCollection;
     auto pEventHandler = pCollection->pEventHandler;
     pCollection->pFilterGraph = avfilter_graph_alloc();
     if (pCollection->pFilterGraph == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
+        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
         return false;
     }
     Event::dispatch(pEventHandler, EVENTTYPE_ALLOCATED_FILTER_GRAPH, &details);
@@ -242,7 +253,7 @@ bool buildSystemFilterGraph(AvCollection *pCollection)
     }
     Event::dispatch(pEventHandler, EVENTTYPE_PARSED_SYSTEM_FILTER_GRAPH, &details);
 
-    auto pFilter = findFilter("abuffer", pEventHandler);
+    auto pFilter = findFilter("abuffer", pEventHandler, pCollection->pCallback);
     if (pFilter == nullptr)
     {
         return false;
@@ -266,7 +277,7 @@ bool buildSystemFilterGraph(AvCollection *pCollection)
     }
     Event::dispatch(pEventHandler, EVENTTYPE_LINKED_SYSTEM_ABUFFER, &details);
 
-    pFilter = findFilter("abuffersink", pEventHandler);
+    pFilter = findFilter("abuffersink", pEventHandler, pCollection->pCallback);
     if (pFilter == nullptr)
     {
         return false; // Events already handled.

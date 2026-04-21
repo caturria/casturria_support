@@ -22,6 +22,7 @@
 struct FilterGraph
 {
     EventHandler *pEventHandler; // Must always be the first member.
+    EventCallback pCallback;     // Must always be the second member.
     AVFilterGraph *pGraph;
     AVFilterContext **ppInputs;
     size_t inputCount;
@@ -58,6 +59,7 @@ static size_t countInputsOrOutputs(AVFilterInOut *pItems)
         count++;
         pItems = pItems->next;
     }
+
     return count;
 }
 
@@ -70,29 +72,33 @@ static bool linkInputs(FilterGraph *pFilterGraph, AVFilterInOut *pInputs)
 {
     auto pEventHandler = pFilterGraph->pEventHandler;
     EventDetails details;
+    details.pCallback = pFilterGraph->pCallback;
     details.details[0].pArbitraryDetail = pFilterGraph;
     pFilterGraph->inputCount = countInputsOrOutputs(pInputs);
     if (pFilterGraph->inputCount == 0)
     {
         return true; // Nothing to do here.
     }
+
     pFilterGraph->ppInputs = (AVFilterContext **)malloc(sizeof(AVFilterContext *) * pFilterGraph->inputCount);
     if (pFilterGraph->ppInputs == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
+        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
         return false;
     }
+
     pFilterGraph->pTimestamps = (uint64_t *)malloc(sizeof(uint64_t) * pFilterGraph->inputCount);
     if (pFilterGraph->pTimestamps == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
+        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
         return false;
     }
+
     memset(pFilterGraph->pTimestamps, 0, sizeof(uint64_t) * pFilterGraph->inputCount);
 
     auto nextIndex = 0; // where to store the next AVFilterContext.
 
-    auto pFilter = findFilter("abuffer", pEventHandler);
+    auto pFilter = findFilter("abuffer", pEventHandler, pFilterGraph->pCallback);
     if (pFilter == nullptr)
     {
         return false;
@@ -141,6 +147,7 @@ static bool linkOutputs(FilterGraph *pFilterGraph, AVFilterInOut *pOutputs)
 {
     auto pEventHandler = pFilterGraph->pEventHandler;
     EventDetails details;
+    details.pCallback = pFilterGraph->pCallback;
     details.details[0].pArbitraryDetail = pFilterGraph;
 
     pFilterGraph->outputCount = countInputsOrOutputs(pOutputs);
@@ -152,7 +159,7 @@ static bool linkOutputs(FilterGraph *pFilterGraph, AVFilterInOut *pOutputs)
     pFilterGraph->ppOutputs = (AVFilterContext **)malloc(sizeof(AVFilterContext *) * pFilterGraph->outputCount);
     if (pFilterGraph->ppOutputs == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
+        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
         return false;
     }
 
@@ -162,13 +169,13 @@ static bool linkOutputs(FilterGraph *pFilterGraph, AVFilterInOut *pOutputs)
                                          pFilterGraph->outSampleRate,
                                          getChannelLayoutDescription(&pFilterGraph->outChannelLayout));
 
-    auto pFormatFilter = findFilter("aformat", pEventHandler);
+    auto pFormatFilter = findFilter("aformat", pEventHandler, pFilterGraph->pCallback);
     if (pFormatFilter == nullptr)
     {
         return false;
     }
 
-    auto pBufferFilter = findFilter("abuffersink", pEventHandler);
+    auto pBufferFilter = findFilter("abuffersink", pEventHandler, pFilterGraph->pCallback);
     if (pBufferFilter == nullptr)
     {
         return false;
@@ -184,7 +191,6 @@ static bool linkOutputs(FilterGraph *pFilterGraph, AVFilterInOut *pOutputs)
             handleAvError(pFilterGraph, EVENTTYPE_FAILED_TO_INITIALIZE_APPLICATION_AFORMAT, result);
             return false;
         }
-
         details.details[1].pStringDetail = pOutputs->filter_ctx->name;
         details.details[2].intDetail = pOutputs->pad_idx;
         Event::dispatch(pEventHandler, EVENTTYPE_INITIALIZED_APPLICATION_AFORMAT, &details);
@@ -195,6 +201,7 @@ static bool linkOutputs(FilterGraph *pFilterGraph, AVFilterInOut *pOutputs)
             handleAvError(pFilterGraph, EVENTTYPE_FAILED_TO_LINK_APPLICATION_AFORMAT, result);
             return false;
         }
+        Event::dispatch(pEventHandler, EVENTTYPE_LINKED_APPLICATION_AFORMAT, &details);
 
         // The abuffersink filter has no constraints because the graph is free to configure sample rates and/or channel layouts as it sees fit.
         AVFilterContext *pBuffer;
@@ -212,7 +219,7 @@ static bool linkOutputs(FilterGraph *pFilterGraph, AVFilterInOut *pOutputs)
             handleAvError(pFilterGraph, EVENTTYPE_FAILED_TO_LINK_APPLICATION_ABUFFERSINK, result);
             return false;
         }
-        Event::dispatch(pEventHandler, EVENTTYPE_INITIALIZED_APPLICATION_ABUFFERSINK, &details);
+        Event::dispatch(pEventHandler, EVENTTYPE_LINKED_APPLICATION_ABUFFERSINK, &details);
 
         pFilterGraph->ppOutputs[nextIndex++] = pBuffer;
         pOutputs = pOutputs->next;
@@ -240,7 +247,7 @@ static bool linkInputsAndOutputs(FilterGraph *pFilterGraph, AVFilterInOut *pInpu
     return result;
 }
 
-FilterGraph *casturria_newFilterGraph(const char *pDescription, EventHandler *pEventHandler, uint32_t inSampleRate, uint8_t inChannels, uint32_t outSampleRate, uint8_t outChannels)
+FilterGraph *casturria_newFilterGraph(const char *pDescription, EventHandler *pEventHandler, EventCallback pCallback, uint32_t inSampleRate, uint8_t inChannels, uint32_t outSampleRate, uint8_t outChannels)
 {
     auto pFilterGraph = (FilterGraph *)malloc(sizeof(FilterGraph));
     if (pFilterGraph == nullptr)
@@ -251,22 +258,24 @@ FilterGraph *casturria_newFilterGraph(const char *pDescription, EventHandler *pE
 
     memset(pFilterGraph, 0, sizeof(FilterGraph));
 
+    pFilterGraph->pEventHandler = pEventHandler;
+    pFilterGraph->pCallback = pCallback;
+
+    EventDetails details;
+    details.pCallback = pCallback;
+    details.details[0].pArbitraryDetail = pFilterGraph;
+
     pFilterGraph->pFrame = av_frame_alloc();
     if (pFilterGraph->pFrame == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
+        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
         return fail(pFilterGraph);
     }
-
-    pFilterGraph->pEventHandler = pEventHandler;
-
-    EventDetails details;
-    details.details[0].pArbitraryDetail = pFilterGraph;
 
     pFilterGraph->pGraph = avfilter_graph_alloc();
     if (pFilterGraph->pGraph == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
+        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
         return fail(pFilterGraph);
     }
     auto pGraph = pFilterGraph->pGraph;
@@ -291,6 +300,7 @@ FilterGraph *casturria_newFilterGraph(const char *pDescription, EventHandler *pE
         // Events and I/O list cleanup already handled.
         return fail(pFilterGraph);
     }
+
     result = avfilter_graph_config(pFilterGraph->pGraph, nullptr);
     if (result < 0)
     {
@@ -298,6 +308,7 @@ FilterGraph *casturria_newFilterGraph(const char *pDescription, EventHandler *pE
         return fail(pFilterGraph);
     }
     Event::dispatch(pEventHandler, EVENTTYPE_CONFIGURED_APPLICATION_FILTER_GRAPH, &details);
+
     return pFilterGraph;
 }
 
@@ -309,24 +320,30 @@ void casturria_freeFilterGraph(FilterGraph *pFilterGraph)
     {
         free(pFilterGraph->pTimestamps);
     }
+
     if (pFilterGraph->ppInputs != nullptr)
     {
         free(pFilterGraph->ppInputs);
     }
+
     if (pFilterGraph->ppOutputs != nullptr)
     {
         free(pFilterGraph->ppOutputs);
     }
+
     free(pFilterGraph);
 }
+
 size_t casturria_getFilterGraphInputs(const FilterGraph *pFilterGraph)
 {
     return pFilterGraph->inputCount;
 }
+
 size_t casturria_getFilterGraphOutputs(const FilterGraph *pFilterGraph)
 {
     return pFilterGraph->outputCount;
 }
+
 bool casturria_sendInput(FilterGraph *pFilterGraph, const float *pInput, size_t count, size_t input)
 {
     if (input >= pFilterGraph->inputCount)
@@ -357,6 +374,7 @@ bool casturria_sendInput(FilterGraph *pFilterGraph, const float *pInput, size_t 
     {
         handleAvError(pFilterGraph, EVENTTYPE_FILTER_FAILED_TO_ALLOCATE_FRAME_BUFFER, result);
     }
+
     memcpy(pFrame->data[0], pInput, count * 4 * pFrame->ch_layout.nb_channels);
     result = av_buffersrc_add_frame(pFilterGraph->ppInputs[input], pFrame);
     av_frame_unref(pFrame);
@@ -365,6 +383,7 @@ bool casturria_sendInput(FilterGraph *pFilterGraph, const float *pInput, size_t 
         handleAvError(pFilterGraph, EVENTTYPE_APPLICATION_FILTER_ERROR, result);
         return false;
     }
+
     return true;
 }
 
@@ -374,20 +393,24 @@ size_t casturria_receiveOutput(FilterGraph *pFilterGraph, float *pOutput, size_t
     {
         return 0;
     }
+
     auto pFrame = pFilterGraph->pFrame;
     auto pEventHandler = pFilterGraph->pEventHandler;
     EventDetails details;
+    details.pCallback = pFilterGraph->pCallback;
     details.details[0].pArbitraryDetail = pFilterGraph;
     int result = av_buffersink_get_samples(pFilterGraph->ppOutputs[output], pFrame, count);
     if (result == AVERROR(EAGAIN))
     {
         return 0;
     }
+
     if (result == AVERROR_EOF)
     {
         Event::dispatch(pEventHandler, EVENTTYPE_FILTER_GRAPH_EOF, &details);
         return 0;
     }
+
     memcpy(pOutput, pFrame->data[0], pFrame->nb_samples * 4 * pFrame->ch_layout.nb_channels);
     size_t samplesOut = pFrame->nb_samples;
     av_frame_unref(pFrame);

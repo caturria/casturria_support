@@ -19,15 +19,16 @@
 #include "decoder.h"
 #include "internal/util.h"
 
-Decoder *casturria_newDecoder(const char *pURL, EventHandler *pEventHandler, uint32_t sampleRate, uint8_t channels)
+Decoder *casturria_newDecoder(const char *pURL, EventHandler *pEventHandler, EventCallback pCallback, uint32_t sampleRate, uint8_t channels)
 {
-    auto pDecoder = newAvCollection(pEventHandler);
+    auto pDecoder = newAvCollection(pEventHandler, pCallback);
     if (pDecoder == nullptr)
     {
         return nullptr; // Event handling will already be done.
     }
     // The EventDetails can be reused usually by changing just one field.
     EventDetails details;
+    details.pCallback = pCallback;
     details.details[0].pArbitraryDetail = pDecoder;
 
     int result = avformat_open_input(&pDecoder->pFormatContext, pURL, nullptr, nullptr);
@@ -66,7 +67,7 @@ Decoder *casturria_newDecoder(const char *pURL, EventHandler *pEventHandler, uin
     if (pDecoder->pCodecContext == nullptr)
     {
         // Most likely OOM from what I can tell.
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
+        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
         return fail(pDecoder);
     }
     details.details[1].pStringDetail = pCodec->long_name;
@@ -105,6 +106,7 @@ Decoder *casturria_newDecoder(const char *pURL, EventHandler *pEventHandler, uin
 
     return pDecoder;
 }
+
 void casturria_freeDecoder(Decoder *pDecoder)
 {
     freeAvCollection(pDecoder);
@@ -116,29 +118,34 @@ void casturria_freeDecoder(Decoder *pDecoder)
  */
 static bool processPacket(Decoder *pDecoder)
 {
+    EventDetails details;
+    details.pCallback = pDecoder->pCallback;
+    details.details[0].pArbitraryDetail = pDecoder;
+
     while (true)
     {
         int result = av_read_frame(pDecoder->pFormatContext, pDecoder->pPacket);
         if (result == AVERROR_EOF)
         {
-            EventDetails details;
-            details.details[0].pArbitraryDetail = pDecoder;
             Event::dispatch(pDecoder->pEventHandler, EVENTTYPE_DEMUX_COMPLETE, &details);
             avcodec_send_packet(pDecoder->pCodecContext, nullptr); // Flush.
             return true;                                           // Decoding layer should still try to render.
         }
+
         if (result != 0)
         {
             // Legitimate error here. Could be I/O related.
             handleAvError(pDecoder, EVENTTYPE_DEMUX_ERROR, result);
             return false;
         }
+
         if (pDecoder->pPacket->stream_index != pDecoder->stream)
         {
             // Packet is metadata, video, or something else we don't want to deal with here.
             av_packet_unref(pDecoder->pPacket);
             continue;
         }
+
         result = avcodec_send_packet(pDecoder->pCodecContext, pDecoder->pPacket);
         av_packet_unref(pDecoder->pPacket);
         if (result != 0)
@@ -147,6 +154,7 @@ static bool processPacket(Decoder *pDecoder)
             handleAvError(pDecoder, EVENTTYPE_DECODE_ERROR, result);
             return false;
         }
+
         return true;
     }
 }
@@ -168,21 +176,25 @@ static bool processFrame(Decoder *pDecoder)
                 // Not EOF, some other demuxing failure.
                 return false;
             }
+
             // Got another packet, so try decoding again.
             continue;
         }
+
         if (result == AVERROR_EOF)
         {
             // Flush the filter chain.
             (void)av_buffersrc_add_frame(pDecoder->pFilterGraphIn, nullptr);
             return true;
         }
+
         if (result < 0)
         {
             // Decoding error. Probably corrupted data.
             handleAvError(pDecoder, EVENTTYPE_DECODE_ERROR, result);
             return false;
         }
+
         // Got a frame. Deliver it to the filter layer.
         result = av_buffersrc_add_frame(pDecoder->pFilterGraphIn, pDecoder->pFrame);
         av_frame_unref(pDecoder->pFrame);
@@ -191,6 +203,7 @@ static bool processFrame(Decoder *pDecoder)
             handleAvError(pDecoder, EVENTTYPE_SYSTEM_FILTER_ERROR, result);
             return false;
         }
+
         return true;
     }
 }
@@ -205,6 +218,7 @@ static bool prepareNextFrame(Decoder *pDecoder)
     av_frame_unref(pDecoder->pFrame);
     pDecoder->framesLeftInBatch = 0;
     EventDetails details;
+    details.pCallback = pDecoder->pCallback;
     details.details[0].pArbitraryDetail = pDecoder;
     while (true)
     {
@@ -215,6 +229,7 @@ static bool prepareNextFrame(Decoder *pDecoder)
             Event::dispatch(pDecoder->pEventHandler, EVENTTYPE_DECODE_COMPLETE, &details);
             return false;
         }
+
         if (result == AVERROR(EAGAIN))
         {
             if (processFrame(pDecoder))
@@ -222,14 +237,17 @@ static bool prepareNextFrame(Decoder *pDecoder)
                 // A frame was successfully decoded. Try filtering again.
                 continue;
             }
+
             return false; // Decoding error.
         }
+
         // Got a filtered frame.
         auto pFrame = pDecoder->pFrame;
         if (pFrame->format != AV_SAMPLE_FMT_FLT)
         {
             Event::dispatch(pDecoder->pEventHandler, EVENTTYPE_BUG, &details);
         }
+
         pDecoder->framesLeftInBatch = pFrame->nb_samples;
         return true;
     }
@@ -249,6 +267,7 @@ static size_t render(Decoder *pDecoder, float *pBuffer, size_t count)
     {
         return 0;
     }
+
     auto pFrame = pDecoder->pFrame;
     // Figure out how much of this frame has already been delivered and where the first fresh sample is.
     size_t delta = pFrame->nb_samples - pDecoder->framesLeftInBatch;
@@ -271,10 +290,12 @@ size_t casturria_decode(Decoder *pDecoder, float *pOutput, size_t count)
                 break; // EOF or error.
             }
         }
+
         auto framesRenderedThisTime = render(pDecoder, pMark, count);
         framesRendered += framesRenderedThisTime;
         count -= framesRenderedThisTime;
         pMark += (framesRenderedThisTime * pDecoder->pFrame->ch_layout.nb_channels);
     }
+
     return framesRendered;
 }

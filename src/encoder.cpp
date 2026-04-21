@@ -29,6 +29,7 @@
 static void handleInvalidArgument(Encoder *pEncoder, const std::string &key, const std::string &value)
 {
     EventDetails details;
+    details.pCallback = pEncoder->pCallback;
     details.details[0].pArbitraryDetail = pEncoder;
     details.details[1].pStringDetail = key.c_str();
     details.details[2].pStringDetail = value.c_str();
@@ -46,8 +47,10 @@ AVSampleFormat negotiateSampleFormat(const AVCodec *pCodec)
     const AVSampleFormat *pSupportedFormats;
     int numSupportedFormats;
     bool table[length];
+
     // Build a lookup table of all possible formats, then rank them.
     memset(table, 0, sizeof(table));
+
     avcodec_get_supported_config(nullptr, pCodec, AV_CODEC_CONFIG_SAMPLE_FORMAT, 0, (const void **)&pSupportedFormats, &numSupportedFormats);
     if (pSupportedFormats == nullptr)
     {
@@ -59,37 +62,50 @@ AVSampleFormat negotiateSampleFormat(const AVCodec *pCodec)
     {
         table[pSupportedFormats[i]] = true;
     }
+
     // first choice is floating point interleved because it's what everything else works with internally.
     if (table[AV_SAMPLE_FMT_FLT])
         return AV_SAMPLE_FMT_FLT;
+
     // Floating point planar is the next closest.
     if (table[AV_SAMPLE_FMT_FLTP])
         return AV_SAMPLE_FMT_FLTP;
+
     // If those aren't available, then the next best choice would be double since we can convert to this with no quality loss.
     // In practice it's pretty unlikely we negotiate anything before reaching for 16-bit at this point.
     if (table[AV_SAMPLE_FMT_DBL])
         return AV_SAMPLE_FMT_DBL;
+
     if (table[AV_SAMPLE_FMT_DBLP])
         return AV_SAMPLE_FMT_DBLP;
+
     // If we have to convert to integer, prefer 32 since this is the closest to what our input data is.
     if (table[AV_SAMPLE_FMT_S32])
         return AV_SAMPLE_FMT_S32;
+
     if (table[AV_SAMPLE_FMT_S32P])
         return AV_SAMPLE_FMT_S32P;
+
     // Try larger ints before negotiating down.
     if (table[AV_SAMPLE_FMT_S64])
         return AV_SAMPLE_FMT_S64;
+
     if (table[AV_SAMPLE_FMT_S64P])
         return AV_SAMPLE_FMT_S64P;
+
     if (table[AV_SAMPLE_FMT_S16])
         return AV_SAMPLE_FMT_S16;
+
     if (table[AV_SAMPLE_FMT_S16P])
         return AV_SAMPLE_FMT_S16P;
+
     // One more round just for kicks at this point. I doubt there's any interest in a codec that only supports 8-bit samples in a radio context.
     if (table[AV_SAMPLE_FMT_U8])
         return AV_SAMPLE_FMT_U8;
+
     if (table[AV_SAMPLE_FMT_U8P])
         return AV_SAMPLE_FMT_U8P;
+
     // If we get here it's most likely because a non-audio codec was chosen.
     return AV_SAMPLE_FMT_NONE;
 }
@@ -110,8 +126,10 @@ uint32_t negotiateSampleRate(const AVCodec *pCodec, uint32_t requestedSampleRate
         // Codec can encode to any rate.
         return requestedSampleRate;
     }
+
     uint32_t consideredSampleRate = 0;
     auto diff = std::numeric_limits<uint32_t>::max();
+
     for (int i = 0; i < numSupportedRates; i++)
     {
         auto currentDiff = std::abs((int)(pSupportedRates[i] - requestedSampleRate));
@@ -121,36 +139,41 @@ uint32_t negotiateSampleRate(const AVCodec *pCodec, uint32_t requestedSampleRate
             consideredSampleRate = pSupportedRates[i];
         }
     }
+
     return consideredSampleRate;
 }
 
-Encoder *casturria_newEncoder(const char *pURL, EventHandler *pEventHandler, uint32_t inSampleRate, uint8_t inChannels, const char *pOptions)
+Encoder *casturria_newEncoder(const char *pURL, EventHandler *pEventHandler, EventCallback pCallback, uint32_t inSampleRate, uint8_t inChannels, const char *pOptions)
 {
-    auto pEncoder = newAvCollection(pEventHandler);
+    auto pEncoder = newAvCollection(pEventHandler, pCallback);
     if (pEncoder == nullptr)
     {
         return nullptr; // Events are already handled.
     }
+
     pEncoder->isEncoder = true;
     pEncoder->inSampleRate = inSampleRate;
     av_channel_layout_default(&pEncoder->inChannelLayout, inChannels);
     pEncoder->outSampleRate = pEncoder->inSampleRate;       // JSON might override this later.
     pEncoder->outChannelLayout = pEncoder->inChannelLayout; // JSON might override this later.
     EventDetails details;
+    details.pCallback = pCallback;
     details.details[0].pArbitraryDetail = pEncoder;
     pEncoder->pFormatContext = avformat_alloc_context();
     if (pEncoder->pFormatContext == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
+        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
         return fail(pEncoder);
     }
     Event::dispatch(pEventHandler, EVENTTYPE_ENCODE_ALLOCATED_FORMAT_CONTEXT, &details);
+
     auto pFormatContext = pEncoder->pFormatContext;
     pFormatContext->oformat = av_guess_format(nullptr, pURL, nullptr); // Placeholder. The JSON might override this. Verify later.
     const AVCodec *pCodec = nullptr;                                   // JSON might set this. Otherwise we guess it later from the format.
     uint32_t bitRate = 0;                                              // If unchanged, use codec-specific default.
     int quality = -1;                                                  // If unchanged, use codec-specific default.
     int result;
+
     try
     {
         simdjson::ondemand::parser parser;
@@ -159,6 +182,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventHandler *pEventHandler, uin
         auto doc = parser.iterate(simdjson::pad(json));
         auto obj = doc.get_object();
         Event::dispatch(pEventHandler, EVENTTYPE_ENCODE_FOUND_JSON_OBJECT, &details);
+
         for (auto i : obj)
         {
             // Strings are copied because most of the time they need to be passed as C-strings.
@@ -200,6 +224,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventHandler *pEventHandler, uin
             {
                 bitRate = (uint32_t)i.value();
             }
+
             else if (key == "quality")
             {
                 quality = (int)i.value();
@@ -214,11 +239,13 @@ Encoder *casturria_newEncoder(const char *pURL, EventHandler *pEventHandler, uin
                     auto asString = std::format("{}", (int32_t)value);
                     result = av_dict_set(&pEncoder->pOptions, key.c_str(), asString.c_str(), 0);
                 }
+
                 else
                 {
                     // Assume it's a string -- the only other supportable type -- and handle incorrect_type if it comes to that.
                     result = av_dict_set(&pEncoder->pOptions, key.c_str(), ((std::string)value).c_str(), 0);
                 }
+
                 if (result < 0)
                 {
                     handleAvError(pEncoder, EVENTTYPE_ENCODE_ERROR, result);
@@ -252,6 +279,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventHandler *pEventHandler, uin
         // We don't have a codec yet, but we do have a format, so we can try deduction.
         pCodec = avcodec_find_encoder(av_guess_codec(pFormatContext->oformat, nullptr, pURL, nullptr, AVMEDIA_TYPE_AUDIO));
     }
+
     if (pCodec == nullptr)
     {
         // No way to proceed if we still lack a codec here.
@@ -288,8 +316,8 @@ Encoder *casturria_newEncoder(const char *pURL, EventHandler *pEventHandler, uin
     }
     details.details[1].intDetail = pCodecContext->sample_rate;
     Event::dispatch(pEventHandler, EVENTTYPE_ENCODE_NEGOTIATED_SAMPLE_RATE, &details);
-    pEncoder->outSampleRate = pCodecContext->sample_rate;
 
+    pEncoder->outSampleRate = pCodecContext->sample_rate;
     pCodecContext->bit_rate = bitRate;
 
     if (quality > 0)
@@ -297,6 +325,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventHandler *pEventHandler, uin
         pCodecContext->global_quality = (quality - 1) * FF_QP2LAMBDA;
         pCodecContext->flags |= AV_CODEC_FLAG_QSCALE; // Overrides bitRate.
     }
+
     pCodecContext->ch_layout = pEncoder->outChannelLayout;
 
     result = avcodec_open2(pCodecContext, pCodec, &pEncoder->pOptions);
@@ -314,8 +343,8 @@ Encoder *casturria_newEncoder(const char *pURL, EventHandler *pEventHandler, uin
         Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, nullptr);
         return fail(pEncoder);
     }
-
     Event::dispatch(pEventHandler, EVENTTYPE_ENCODE_ALLOCATED_STREAM, &details);
+
     result = avcodec_parameters_from_context(pStream->codecpar, pCodecContext);
     details.details[1].pStringDetail = pCodec->long_name;
     if (result < 0)
@@ -377,6 +406,7 @@ static bool ingest(Encoder *pEncoder, const float *pInput, size_t count)
         handleAvError(pEncoder, EVENTTYPE_ENCODE_FAILED_TO_ALLOCATE_FRAME_BUFFER, result);
         return false;
     }
+
     memcpy(pFrame->data[0], pInput, count * 4 * pCodecContext->ch_layout.nb_channels);
     result = av_buffersrc_add_frame(pEncoder->pFilterGraphIn, pFrame);
     av_frame_unref(pFrame);
@@ -385,6 +415,7 @@ static bool ingest(Encoder *pEncoder, const float *pInput, size_t count)
         handleAvError(pEncoder, EVENTTYPE_SYSTEM_FILTER_ERROR, result);
         return false;
     }
+
     return true;
 }
 
@@ -403,10 +434,12 @@ static bool encodeAndOutputFrames(Encoder *pEncoder)
         {
             return true; // Ingest more input to continue.
         }
+
         if (result == AVERROR_EOF)
         {
             return true; // done.
         }
+
         result = av_interleaved_write_frame(pEncoder->pFormatContext, pPacket);
         if (result < 0)
         {
@@ -426,6 +459,7 @@ static bool sendFramesToEncoder(Encoder *pEncoder)
     auto pCodecContext = pEncoder->pCodecContext;
     av_frame_unref(pFrame);
     int result;
+
     while (true)
     {
         // Ideally we'd use the asetnsamples filter here for codecs that require specific frame sizes. But it's bugged as of April 2026 and produces frames that are smaller than they're supposed to be.
@@ -433,14 +467,17 @@ static bool sendFramesToEncoder(Encoder *pEncoder)
         {
             result = av_buffersink_get_frame(pEncoder->pFilterGraphOut, pEncoder->pFrame);
         }
+
         else
         {
             result = av_buffersink_get_samples(pEncoder->pFilterGraphOut, pFrame, pCodecContext->frame_size);
         }
+
         if (result == AVERROR(EAGAIN))
         {
             return true; // Ingest more input to continue.
         }
+
         if (result == AVERROR_EOF)
         {
             // Tell the encoder to flush, then drain the last of it.
@@ -448,6 +485,7 @@ static bool sendFramesToEncoder(Encoder *pEncoder)
             encodeAndOutputFrames(pEncoder);
             return true;
         }
+
         pFrame->pts = pEncoder->timestamp;
         pEncoder->timestamp += pFrame->nb_samples;
 
@@ -458,6 +496,7 @@ static bool sendFramesToEncoder(Encoder *pEncoder)
             handleAvError(pEncoder, EVENTTYPE_ENCODE_ERROR, result);
             return false;
         }
+
         encodeAndOutputFrames(pEncoder);
     }
 }
@@ -468,6 +507,7 @@ void casturria_encode(Encoder *pEncoder, const float *pInput, size_t count)
     {
         return;
     }
+
     if (!sendFramesToEncoder(pEncoder))
     {
         return;
@@ -483,6 +523,7 @@ void casturria_finalizeEncoder(Encoder *pEncoder)
         handleAvError(pEncoder, EVENTTYPE_SYSTEM_FILTER_ERROR, result);
         return;
     }
+
     // The encoder will detect the EOF state from the filter and perform its own draining stage.
     sendFramesToEncoder(pEncoder);
     // Finalize the file itself:

@@ -40,6 +40,7 @@ extern "C"
 struct EventEmitter
 {
     EventHandler *pEventHandler;
+    EventCallback pCallback;
 };
 
 /**
@@ -49,7 +50,9 @@ struct EventEmitter
 
 struct AvCollection
 {
+    // Allow interpretation as event emitter by matching first two members.
     EventHandler *pEventHandler;     // Does not own. Must always be the first member.
+    EventCallback pCallback;         // The callback to use with the EventHandler. Must always be second member.
     AVFormatContext *pFormatContext; // Handles muxing/ demuxing.
     AVIOContext *pIOContext;         // I/O for encoding.
     AVCodecContext *pCodecContext;
@@ -71,8 +74,9 @@ struct AvCollection
 /**
  * Internal: allocates a collection, as well as those members which are used for both encoding and decoding.
  * @param pEventHandler the EventHandler to associate.
+ * @param pCallback the callback to use for event handling.
  */
-AvCollection *newAvCollection(EventHandler *pEventHandler);
+AvCollection *newAvCollection(EventHandler *pEventHandler, EventCallback pCallback);
 
 /**
  * Internal: Handles a Libav* error via the event system.
@@ -111,8 +115,9 @@ std::string getChannelLayoutDescription(uint8_t channels);
  * Looks up a filter and reports an error if not found.
  * @param pName the name of the filter to locate.
  * @param pEventHandler the event handler to use for error reporting.
+ * @param pCallback the callback to use for error reporting.
  */
-const AVFilter *findFilter(const char *pName, EventHandler *pEventHandler);
+const AVFilter *findFilter(const char *pName, EventHandler *pEventHandler, EventCallback pCallback);
 
 /**
  * Internal: builds the system (non-configurable) filter graph for an encoder or decoder.

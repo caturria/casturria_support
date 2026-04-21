@@ -34,12 +34,13 @@ extern "C"
     /**
      * Opens a file for encoding.
      * @param pURL any valid URL to an audio asset supported by FFmpeg.
-     * @param pEventHandler a previously configured EventHandler instance.
+     * @param pEventHandler a previously configured EventHandler instance to tell the encoder which errors to report.
+     * @param pCallback the callback to use for error reporting.
      * @param inSampleRate the sample rate of the incoming audio.
      * @param inChannels the channel count of the incoming audio.
      * @param options a list of muxer and codec parameters in JSON format.
      */
-    Encoder *casturria_newEncoder(const char *pURL, EventHandler *pEventHandler, uint32_t inSampleRate, uint8_t inChannels, const char *pOptions);
+    Encoder *casturria_newEncoder(const char *pURL, EventHandler *pEventHandler, EventCallback pCallback, uint32_t inSampleRate, uint8_t inChannels, const char *pOptions);
 
     /**
      * Frees an encoder handle previously returned by casturria_newEncoder().

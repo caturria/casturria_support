@@ -19,54 +19,56 @@
 
 #include "internal/events.h"
 #include <stdlib.h>
-
-/**
- * An event callback which receives an event and does nothing with it.
- * All event callbacks are initialized to this by default.
- */
-static void noOpEventCallback(uint32_t event, EventDetails *pDetails)
-{
-}
+#include <bitset>
+#include <stdexcept>
 
 struct EventHandler
 {
-    EventCallback events[EVENTTYPE_COUNT];
+    std::bitset<EVENTTYPE_COUNT> events;
 };
+
 EventHandler *casturria_newEventHandler()
 {
-    auto handler = (EventHandler *)malloc(sizeof(EventHandler));
-    if (handler == nullptr)
+    try
     {
+        auto handler = new EventHandler();
+        if (handler == nullptr)
+        {
+            return nullptr;
+        }
+        return handler;
+    }
+    catch (std::exception &e)
+    {
+        // No way of reporting this.
         return nullptr;
     }
-    for (int i = 0; i < EVENTTYPE_COUNT; i++)
-    {
-        handler->events[i] = noOpEventCallback;
-    }
-    return handler;
 }
 
 void casturria_freeEventHandler(EventHandler *pHandler)
 {
-    free(pHandler);
+    delete pHandler;
 }
-void casturria_registerEventCallback(EventHandler *pHandler, uint32_t event, EventCallback callback)
+
+void casturria_subscribeToEvent(EventHandler *pHandler, uint32_t event, bool subscribed)
 {
     if (event >= EVENTTYPE_COUNT)
     {
         return;
     }
-    pHandler->events[event] = callback == nullptr ? noOpEventCallback : callback;
+    pHandler->events[event] = subscribed;
 }
 
 const char *casturria_getStringDetail(EventDetails *pDetails, uint8_t detail)
 {
     return pDetails->details[detail].pStringDetail;
 }
+
 int32_t casturria_getIntDetail(EventDetails *pDetails, uint8_t detail)
 {
     return pDetails->details[detail].intDetail;
 }
+
 namespace Event
 {
     void dispatch(EventHandler *pHandler, event_t event, EventDetails *pDetails)
@@ -75,6 +77,9 @@ namespace Event
         {
             return;
         }
-        pHandler->events[event](event, pDetails);
+        if (pHandler->events[event])
+        {
+            pDetails->pCallback(event, pDetails);
+        }
     }
 }

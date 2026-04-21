@@ -30,19 +30,19 @@ extern "C"
      * A handle to an audio decoder.
      * @note Not threadsafe.
      */
-    // struct AvCollection;
     typedef struct AvCollection Decoder;
 
     /**
      * Opens a file for decoding.
      * @param pURL any valid URL to an audio asset supported by FFmpeg.
-     * @param pEventHandler a previously configured EventHandler instance.
+     * @param pEventHandler a previously configured EventHandler instance to tell the decoder which events to report.
+     * @param pCallback a callback to use for event handling.
      * @param sampleRate the desired output sample rate.
      * @param channels the desired output channels.
      * @note Several events will be dispatched to the provided EventHandler during the course of decoder initialization.
      * @returns Decoder* on success or nullptr on failure.
      */
-    Decoder *casturria_newDecoder(const char *pURL, EventHandler *pEventHandler, uint32_t sampleRate, uint8_t channels);
+    Decoder *casturria_newDecoder(const char *pURL, EventHandler *pEventHandler, EventCallback pCallback, uint32_t sampleRate, uint8_t channels);
 
     /**
      * Frees a Decoder handle previously returned by casturria_newDecoder().

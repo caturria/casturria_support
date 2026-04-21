@@ -29,6 +29,7 @@ const int MAX_EVENT_DETAILS = 3; // Increase as needed.
 
 struct EventDetails
 {
+    EventCallback pCallback;
     typedef union
     {
         const char *pStringDetail;
@@ -41,12 +42,12 @@ struct EventDetails
 namespace Event
 {
 
-/**
- * Dispatches the given event to a callback registered on the given EventHandler.
- * @param pHandler the EventHandler to dispatch the event to.
- * @param event the type of event being dispatched.
- * @param pDetails the specific details for this event.
- * @note out of range values for event result in a no-op.
- */
-void dispatch(EventHandler *pHandler, event_t event, EventDetails *pDetails);
+    /**
+     * Dispatches the given event to a callback registered on the given EventHandler.
+     * @param pHandler the EventHandler to dispatch the event to.
+     * @param event the type of event being dispatched.
+     * @param pDetails the specific details for this event.
+     * @note out of range values for event result in a no-op.
+     */
+    void dispatch(EventHandler *pHandler, event_t event, EventDetails *pDetails);
 }

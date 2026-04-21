@@ -681,12 +681,12 @@ extern "C"
     void casturria_freeEventHandler(EventHandler *pEventHandler);
 
     /**
-     * Registers the given callback to be called when the given event is dispatched.
-     * @param pHandler the EventHandler on which to register the callback.
-     * @param event the event to register the callback to.
-     * @param callback the callback to register.
+     * Declares the application's interest (or lack thereof) in a given event.
+     * @param pHandler the EventHandler on which to declare the event.
+     * @param event the event to enable or disable.
+     * @param enabled whether this event should be actioned.
      */
-    void casturria_registerEventCallback(EventHandler *pHandler, uint32_t event, EventCallback callback);
+    void casturria_subscribeToEvent(EventHandler *pHandler, uint32_t event, bool subscribed);
 
     /**
      * Gets an event detail as a string.
