@@ -18,61 +18,43 @@
 */
 
 #include "internal/util.h"
-/**
- * A common representation of an FFmpeg error event.
- */
-struct AvErrorEvent
-{
-    EventDetails details;
-    std::string description;
-};
 
-AvCollection *newAvCollection(EventHandler *pEventHandler, EventCallback pCallback)
+AvCollection *newAvCollection(EventCallback pCallback)
 {
-    EventDetails details;
-    details.pCallback = pCallback;
 
     auto pCollection = (AvCollection *)malloc(sizeof(AvCollection));
     if (pCollection == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
+        dispatchOutOfMemory(pCallback, EVENTTYPE_SETUP_FAILURE);
         return nullptr;
     }
     memset(pCollection, 0, sizeof(AvCollection));
 
-    details.details[0].pArbitraryDetail = pCollection;
-
-    pCollection->pEventHandler = pEventHandler;
     pCollection->pCallback = pCallback;
 
     pCollection->pPacket = av_packet_alloc();
     if (pCollection->pPacket == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
+        dispatchOutOfMemory(pCallback, EVENTTYPE_SETUP_FAILURE);
         return fail(pCollection);
     }
 
     pCollection->pFrame = av_frame_alloc();
     if (pCollection->pFrame == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
+        dispatchOutOfMemory(pCallback, EVENTTYPE_SETUP_FAILURE);
         return fail(pCollection);
     }
 
     return pCollection;
 }
 
-void handleAvError(void *pArbitrary, event_t event, int err)
+std::string getAVErrorDescription(int err)
 {
-    auto pEmitter = (EventEmitter *)pArbitrary;
-    auto pEventHandler = pEmitter->pEventHandler;
-    AvErrorEvent e;
-    e.description.resize(AV_ERROR_MAX_STRING_SIZE);
-    av_strerror(err, e.description.data(), AV_ERROR_MAX_STRING_SIZE);
-    e.details.pCallback = pEmitter->pCallback;
-    e.details.details[0].pArbitraryDetail = pArbitrary;
-    e.details.details[1].pStringDetail = e.description.c_str();
-    Event::dispatch(pEventHandler, event, &e.details);
+    std::string result;
+    result.resize(AV_ERROR_MAX_STRING_SIZE);
+    av_strerror(err, result.data(), AV_ERROR_MAX_STRING_SIZE);
+    return result;
 }
 
 void freeAvCollection(AvCollection *pCollection)
@@ -193,32 +175,25 @@ static std::string getSystemFiltergraphDescription(AvCollection *pCollection)
                        getChannelLayoutDescription(&pCollection->outChannelLayout));
 }
 
-const AVFilter *findFilter(const char *pName, EventHandler *pEventHandler, EventCallback pCallback)
+const AVFilter *findFilter(const char *pName, EventCallback pCallback)
 {
     auto pFilter = avfilter_get_by_name(pName);
     if (pFilter == nullptr)
     {
-        EventDetails details;
-        details.pCallback = pCallback;
-        details.details[0].pStringDetail = pName;
-        Event::dispatch(pEventHandler, EVENTTYPE_LACKING_REQUIRED_FILTER, &details);
+        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, std::format("This build of FFmpeg lacks the {} filter.", pName));
     }
     return pFilter;
 }
 
 bool buildSystemFilterGraph(AvCollection *pCollection)
 {
-    EventDetails details;
-    details.pCallback = pCollection->pCallback;
-    details.details[0].pArbitraryDetail = pCollection;
-    auto pEventHandler = pCollection->pEventHandler;
+    auto pCallback = pCollection->pCallback;
     pCollection->pFilterGraph = avfilter_graph_alloc();
     if (pCollection->pFilterGraph == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
+        dispatchOutOfMemory(pCallback, EVENTTYPE_SETUP_FAILURE);
         return false;
     }
-    Event::dispatch(pEventHandler, EVENTTYPE_ALLOCATED_FILTER_GRAPH, &details);
 
     auto pFilterGraph = pCollection->pFilterGraph;
     auto pCodecContext = pCollection->pCodecContext;
@@ -229,11 +204,10 @@ bool buildSystemFilterGraph(AvCollection *pCollection)
     int result = avfilter_graph_parse2(pFilterGraph, filters.c_str(), &pInputList, &pOutputList);
     if (result < 0)
     {
-        handleAvError(pCollection, EVENTTYPE_FAILED_TO_PARSE_SYSTEM_FILTER_GRAPH, result);
+        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
         return false;
     }
 
-    details.details[1].pStringDetail = filters.c_str();
     // There should be exactly one input and exactly one output.
     // Attempt to extract the filters from the lists, then free the lists, then make sure we have the filters we expect.
     auto pInput = pInputList == nullptr ? nullptr : pInputList->filter_ctx;
@@ -248,36 +222,34 @@ bool buildSystemFilterGraph(AvCollection *pCollection)
     }
     if (pInput == nullptr || pOutput == nullptr)
     {
-        Event::dispatch(pEventHandler, EVENTTYPE_INCORRECT_SYSTEM_FILTER_CONFIG, &details);
+        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, "Incorrect system filtergraph configuration. This is a bug.");
         return false;
     }
-    Event::dispatch(pEventHandler, EVENTTYPE_PARSED_SYSTEM_FILTER_GRAPH, &details);
 
-    auto pFilter = findFilter("abuffer", pEventHandler, pCollection->pCallback);
+    auto pFilter = findFilter("abuffer", pCallback);
     if (pFilter == nullptr)
     {
         return false;
     }
+
     // If we're encoding, we expect the outside world to be feeding float. If we're decoding, then the graph ingests whatever the decoder puts out.
     auto bufferArgs = getAbufferArgs(pCollection);
     result = avfilter_graph_create_filter(&pCollection->pFilterGraphIn, pFilter, nullptr, bufferArgs.c_str(), nullptr, pCollection->pFilterGraph);
     if (result < 0)
     {
-        handleAvError(pCollection, EVENTTYPE_FAILED_TO_INITIALIZE_SYSTEM_ABUFFER, result);
+        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
         return false;
     }
-    Event::dispatch(pEventHandler, EVENTTYPE_INITIALIZED_SYSTEM_ABUFFER, &details);
 
     auto pFilterGraphIn = pCollection->pFilterGraphIn;
     result = avfilter_link(pFilterGraphIn, 0, pInput, 0);
     if (result < 0)
     {
-        handleAvError(pCollection, EVENTTYPE_FAILED_TO_LINK_SYSTEM_ABUFFER, result);
+        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
         return false;
     }
-    Event::dispatch(pEventHandler, EVENTTYPE_LINKED_SYSTEM_ABUFFER, &details);
 
-    pFilter = findFilter("abuffersink", pEventHandler, pCollection->pCallback);
+    pFilter = findFilter("abuffersink", pCallback);
     if (pFilter == nullptr)
     {
         return false; // Events already handled.
@@ -285,26 +257,44 @@ bool buildSystemFilterGraph(AvCollection *pCollection)
     result = avfilter_graph_create_filter(&pCollection->pFilterGraphOut, pFilter, nullptr, getAbuffersinkArgs(&pCollection->outChannelLayout).c_str(), nullptr, pFilterGraph);
     if (result < 0)
     {
-        handleAvError(pCollection, EVENTTYPE_FAILED_TO_INITIALIZE_SYSTEM_ABUFFERSINK, result);
+        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
         return false;
     }
-    Event::dispatch(pEventHandler, EVENTTYPE_INITIALIZED_SYSTEM_ABUFFERSINK, &details);
+
     auto pFilterGraphOut = pCollection->pFilterGraphOut;
     result = avfilter_link(pOutput, 0, pFilterGraphOut, 0);
     if (result < 0)
     {
-        handleAvError(pCollection, EVENTTYPE_FAILED_TO_LINK_SYSTEM_ABUFFERSINK, result);
+        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
         return false;
     }
-    Event::dispatch(pEventHandler, EVENTTYPE_INITIALIZED_SYSTEM_ABUFFERSINK, &details);
 
     result = avfilter_graph_config(pFilterGraph, nullptr);
     if (result < 0)
     {
-        handleAvError(pCollection, EVENTTYPE_FAILED_TO_CONFIGURE_SYSTEM_FILTER_GRAPH, result);
+        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
         return false;
     }
-    Event::dispatch(pEventHandler, EVENTTYPE_CONFIGURED_SYSTEM_FILTER_GRAPH, &details);
 
     return true;
+}
+
+void dispatchEvent(EventCallback pCallback, event_t type, const std::string &message)
+{
+    pCallback(type, message.c_str());
+}
+
+void dispatchEvent(EventCallback pCallback, event_t type, const char *pMessage)
+{
+    pCallback(type, pMessage);
+}
+
+void dispatchEvent(EventCallback pCallback, event_t type, int error)
+{
+    pCallback(type, getAVErrorDescription(error).c_str());
+}
+
+void dispatchOutOfMemory(EventCallback pCallback, event_t type)
+{
+    pCallback(type, "Out of memory.");
 }

@@ -19,69 +19,63 @@
 #include "decoder.h"
 #include "internal/util.h"
 
-Decoder *casturria_newDecoder(const char *pURL, EventHandler *pEventHandler, EventCallback pCallback, uint32_t sampleRate, uint8_t channels)
+Decoder *casturria_newDecoder(const char *pURL, EventCallback pCallback, uint32_t sampleRate, uint8_t channels)
 {
-    auto pDecoder = newAvCollection(pEventHandler, pCallback);
+    auto pDecoder = newAvCollection(pCallback);
     if (pDecoder == nullptr)
     {
-        return nullptr; // Event handling will already be done.
+        dispatchOutOfMemory(pCallback, EVENTTYPE_SETUP_FAILURE);
     }
-    // The EventDetails can be reused usually by changing just one field.
-    EventDetails details;
-    details.pCallback = pCallback;
-    details.details[0].pArbitraryDetail = pDecoder;
 
     int result = avformat_open_input(&pDecoder->pFormatContext, pURL, nullptr, nullptr);
     if (result < 0)
     {
-        handleAvError(pDecoder, EVENTTYPE_DECODE_FAILED_TO_OPEN_INPUT, result);
+        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
         return fail(pDecoder);
     }
-    Event::dispatch(pEventHandler, EVENTTYPE_DECODE_OPENED_INPUT, &details);
+    dispatchEvent(pCallback, EVENTTYPE_SETUP_MILESTONE, std::format("Successfully opened an asset at the URL '{}'.", pURL));
 
     auto pFormatContext = pDecoder->pFormatContext;
     result = avformat_find_stream_info(pFormatContext, nullptr);
     if (result < 0)
     {
-        handleAvError(pDecoder, EVENTTYPE_FAILED_TO_FIND_STREAMS, result);
+        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
         return fail(pDecoder);
     }
     // Report that valid streams were discovered.
-    details.details[1].intDetail = pFormatContext->nb_streams;
-    Event::dispatch(pEventHandler, EVENTTYPE_FOUND_STREAMS, &details);
+    dispatchEvent(
+        pCallback,
+        EVENTTYPE_SETUP_MILESTONE,
+        std::format("The asset at '{}' contains {} {}.",
+                    pURL,
+                    pFormatContext->nb_streams,
+                    pFormatContext->nb_streams == 1 ? "stream" : "streams"));
 
     const AVCodec *pCodec;
     pDecoder->stream = av_find_best_stream(pFormatContext, AVMEDIA_TYPE_AUDIO, -1, -1, &pCodec, 0);
     auto stream = pDecoder->stream;
     if (stream < 0)
     {
-        handleAvError(pDecoder, EVENTTYPE_FAILED_TO_FIND_BEST_STREAM, stream);
+        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
         return fail(pDecoder);
     }
     // Report details of the discovered audio stream.
-    details.details[1].intDetail = stream;
-    details.details[2].pStringDetail = pCodec->long_name;
-    Event::dispatch(pEventHandler, EVENTTYPE_FOUND_BEST_STREAM, &details);
+    dispatchEvent(pCallback, EVENTTYPE_SETUP_MILESTONE, std::format("Successfully identified stream {} of asset '{}' as '{}'.", stream, pURL, pCodec->long_name));
 
     pDecoder->pCodecContext = avcodec_alloc_context3(pCodec);
     if (pDecoder->pCodecContext == nullptr)
     {
-        // Most likely OOM from what I can tell.
-        Event::dispatch(pEventHandler, EVENTTYPE_OUT_OF_MEMORY, &details);
+        dispatchOutOfMemory(pCallback, EVENTTYPE_SETUP_FAILURE);
         return fail(pDecoder);
     }
-    details.details[1].pStringDetail = pCodec->long_name;
-    Event::dispatch(pEventHandler, EVENTTYPE_DECODE_ALLOCATED_CODEC, &details);
 
     auto pCodecContext = pDecoder->pCodecContext;
     result = avcodec_parameters_to_context(pCodecContext, pFormatContext->streams[stream]->codecpar);
     if (result < 0)
     {
-        handleAvError(pDecoder, EVENTTYPE_DECODE_FAILED_TO_CONFIGURE_CODEC, result);
+        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
         return fail(pDecoder);
     }
-    details.details[1].pStringDetail = pCodec->long_name;
-    Event::dispatch(pEventHandler, EVENTTYPE_DECODE_CONFIGURED_CODEC, &details);
 
     // At this point we finally know the details of the input file, needed for the upcoming filter configuration step.
     pDecoder->inSampleRate = pCodecContext->sample_rate;
@@ -92,12 +86,16 @@ Decoder *casturria_newDecoder(const char *pURL, EventHandler *pEventHandler, Eve
     result = avcodec_open2(pCodecContext, pCodec, nullptr);
     if (result < 0)
     {
-        handleAvError(pDecoder, EVENTTYPE_DECODE_FAILED_TO_INITIALIZE_CODEC, result);
+        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
         return fail(pDecoder);
     }
     // Finally report successful decoder initialization.
-    details.details[1].pStringDetail = pCodec->long_name;
-    Event::dispatch(pEventHandler, EVENTTYPE_DECODE_INITIALIZED_CODEC, &details);
+    dispatchEvent(
+        pCallback,
+        EVENTTYPE_SETUP_MILESTONE,
+        std::format("Successfully initialized codec '{}' for asset '{}'.",
+                    pCodec->long_name,
+                    pURL));
 
     if (!buildSystemFilterGraph(pDecoder))
     {
@@ -118,16 +116,14 @@ void casturria_freeDecoder(Decoder *pDecoder)
  */
 static bool processPacket(Decoder *pDecoder)
 {
-    EventDetails details;
-    details.pCallback = pDecoder->pCallback;
-    details.details[0].pArbitraryDetail = pDecoder;
+    auto pCallback = pDecoder->pCallback;
 
     while (true)
     {
         int result = av_read_frame(pDecoder->pFormatContext, pDecoder->pPacket);
         if (result == AVERROR_EOF)
         {
-            Event::dispatch(pDecoder->pEventHandler, EVENTTYPE_DEMUX_COMPLETE, &details);
+            dispatchEvent(pCallback, EVENTTYPE_DEMUX_COMPLETE, "Demux complete!");
             avcodec_send_packet(pDecoder->pCodecContext, nullptr); // Flush.
             return true;                                           // Decoding layer should still try to render.
         }
@@ -135,7 +131,7 @@ static bool processPacket(Decoder *pDecoder)
         if (result != 0)
         {
             // Legitimate error here. Could be I/O related.
-            handleAvError(pDecoder, EVENTTYPE_DEMUX_ERROR, result);
+            dispatchEvent(pCallback, EVENTTYPE_OPERATION_FAILURE, result);
             return false;
         }
 
@@ -151,7 +147,7 @@ static bool processPacket(Decoder *pDecoder)
         if (result != 0)
         {
             // A decoding error. Probably a corrupt or invalid stream.
-            handleAvError(pDecoder, EVENTTYPE_DECODE_ERROR, result);
+            dispatchEvent(pCallback, EVENTTYPE_OPERATION_FAILURE, result);
             return false;
         }
 
@@ -165,6 +161,7 @@ static bool processPacket(Decoder *pDecoder)
  */
 static bool processFrame(Decoder *pDecoder)
 {
+    auto pCallback = pDecoder->pCallback;
     while (true)
     {
         int result = avcodec_receive_frame(pDecoder->pCodecContext, pDecoder->pFrame);
@@ -191,7 +188,7 @@ static bool processFrame(Decoder *pDecoder)
         if (result < 0)
         {
             // Decoding error. Probably corrupted data.
-            handleAvError(pDecoder, EVENTTYPE_DECODE_ERROR, result);
+            dispatchEvent(pCallback, EVENTTYPE_OPERATION_FAILURE, result);
             return false;
         }
 
@@ -200,7 +197,7 @@ static bool processFrame(Decoder *pDecoder)
         av_frame_unref(pDecoder->pFrame);
         if (result < 0)
         {
-            handleAvError(pDecoder, EVENTTYPE_SYSTEM_FILTER_ERROR, result);
+            dispatchEvent(pCallback, EVENTTYPE_OPERATION_FAILURE, result);
             return false;
         }
 
@@ -217,16 +214,14 @@ static bool prepareNextFrame(Decoder *pDecoder)
 {
     av_frame_unref(pDecoder->pFrame);
     pDecoder->framesLeftInBatch = 0;
-    EventDetails details;
-    details.pCallback = pDecoder->pCallback;
-    details.details[0].pArbitraryDetail = pDecoder;
+    auto pCallback = pDecoder->pCallback;
     while (true)
     {
         int result = av_buffersink_get_frame(pDecoder->pFilterGraphOut, pDecoder->pFrame);
         if (result == AVERROR_EOF)
         {
             // Unlike earlier stages, EOF actually needs to stop here.
-            Event::dispatch(pDecoder->pEventHandler, EVENTTYPE_DECODE_COMPLETE, &details);
+            dispatchEvent(pCallback, EVENTTYPE_DECODE_COMPLETE, "Decode complete!");
             return false;
         }
 
@@ -245,7 +240,11 @@ static bool prepareNextFrame(Decoder *pDecoder)
         auto pFrame = pDecoder->pFrame;
         if (pFrame->format != AV_SAMPLE_FMT_FLT)
         {
-            Event::dispatch(pDecoder->pEventHandler, EVENTTYPE_BUG, &details);
+            dispatchEvent(
+                pCallback,
+                EVENTTYPE_OPERATION_FAILURE,
+                std::format("Packet returned from filter has sample format {} instead of flt. This is likely a bug.",
+                            av_get_sample_fmt_name((AVSampleFormat)pFrame->format)));
         }
 
         pDecoder->framesLeftInBatch = pFrame->nb_samples;

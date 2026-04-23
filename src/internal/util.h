@@ -17,7 +17,7 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #pragma once
-#include "events.h"
+#include "../events.h"
 #include <stdlib.h>
 #include <string>
 #include <sstream>
@@ -35,24 +35,13 @@ extern "C"
 }
 
 /**
- * Denotes any structure whose first member is an EventHandler.
- */
-struct EventEmitter
-{
-    EventHandler *pEventHandler;
-    EventCallback pCallback;
-};
-
-/**
  * A container for the many objects needed for FFmpeg encoding and decoding.
  * Aliased as Encoder and Decoder for the purposes of the public API.
  */
 
 struct AvCollection
 {
-    // Allow interpretation as event emitter by matching first two members.
-    EventHandler *pEventHandler;     // Does not own. Must always be the first member.
-    EventCallback pCallback;         // The callback to use with the EventHandler. Must always be second member.
+    EventCallback pCallback;         // The callback to send events to.
     AVFormatContext *pFormatContext; // Handles muxing/ demuxing.
     AVIOContext *pIOContext;         // I/O for encoding.
     AVCodecContext *pCodecContext;
@@ -73,18 +62,15 @@ struct AvCollection
 
 /**
  * Internal: allocates a collection, as well as those members which are used for both encoding and decoding.
- * @param pEventHandler the EventHandler to associate.
  * @param pCallback the callback to use for event handling.
  */
-AvCollection *newAvCollection(EventHandler *pEventHandler, EventCallback pCallback);
+AvCollection *newAvCollection(EventCallback pCallback);
 
 /**
- * Internal: Handles a Libav* error via the event system.
- * @param pArbitrary the entity (Decoder, Encoder, FilterGraph...) that produced the event.
- * @param event the event type being triggered.
+ * Internal: gets a discription of a Libav* AVError as a C++ string.
  * @param err the Libav* error code to get a description of.
  */
-void handleAvError(void *pArbitrary, event_t event, int err);
+std::string getAVErrorDescription(int err);
 
 /**
  * Internal: frees an AvCollection (either an encoder or decoder).
@@ -114,13 +100,41 @@ std::string getChannelLayoutDescription(uint8_t channels);
 /**
  * Looks up a filter and reports an error if not found.
  * @param pName the name of the filter to locate.
- * @param pEventHandler the event handler to use for error reporting.
- * @param pCallback the callback to use for error reporting.
+ * @param pCallback the EventCallback to use for error reporting.
  */
-const AVFilter *findFilter(const char *pName, EventHandler *pEventHandler, EventCallback pCallback);
+const AVFilter *findFilter(const char *pName, EventCallback pCallback);
 
 /**
  * Internal: builds the system (non-configurable) filter graph for an encoder or decoder.
  * @param pCollection the AvCollection to process.
  */
 bool buildSystemFilterGraph(AvCollection *pCollection);
+
+/**
+ * Dispatches the given event to the given EventCallback.
+ * @param pCallback the callback to dispatch the event to.
+ * @param event the type of event being dispatched.
+ * @param message the message to send to the callback.
+ */
+void dispatchEvent(EventCallback pCallback, event_t type, const std::string &message);
+
+/**
+ * Same as above but for a constant cstring.
+ * Caller retains ownership of string.
+ */
+void dispatchEvent(EventCallback pCallback, event_t type, const char *pMessage);
+
+/**
+ * Dispatches a message from av_strerror().
+ * @param pCallback the callback to dispatch to.
+ * @param type the type of event.
+ * @param error the error code to translate and log.
+ */
+void dispatchEvent(EventCallback pCallback, event_t type, int error);
+
+/**
+ * Dispatches an "out of memory" event.
+ * @param pCallback the event callback.
+ * @param type the event type.
+ */
+void dispatchOutOfMemory(EventCallback pCallback, event_t type);

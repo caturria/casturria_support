@@ -29,14 +29,13 @@ extern "C"
     /**
      * Creates a new filter graph.
      * @param pDescription the FFmpeg filter graph description.
-     * @param pEventHandler the event handler to send events to.
      * @param pCallback the callback to use for event handling.
      * @param inSampleRate the sample rate of the incoming audio.
      * @param inChannels the channel count of the incoming audio.
      * @param outSampleRate the desired output sample rate.
      * @param outChannels the desired output sample count.
      */
-    FilterGraph *casturria_newFilterGraph(const char *pDescription, EventHandler *pEventHandler, EventCallback pCallback, uint32_t inSampleRate, uint8_t inChannels, uint32_t outSampleRate, uint8_t outChannels);
+    FilterGraph *casturria_newFilterGraph(const char *pDescription, EventCallback pCallback, uint32_t inSampleRate, uint8_t inChannels, uint32_t outSampleRate, uint8_t outChannels);
 
     /**
      * Frees a filter graph.

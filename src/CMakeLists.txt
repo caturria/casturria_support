@@ -35,7 +35,6 @@ find_library(Z z REQUIRED)
 add_library(casturria_support SHARED
 decoder.cpp
 encoder.cpp
-            events.cpp
             filter.cpp
             util.cpp
            )
