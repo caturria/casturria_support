@@ -53,9 +53,15 @@ export PKG_CONFIG_PATH=${PREFIX}/lib/pkgconfig
 export LIBRARY_PATH=${PREFIX}/lib
 #Work around Lame's broken shared build when linking with LLD.
 #export LDFLAGS="-Wl,--undefined-version"
-export CFLAGS="-fPIC"
-export CXXFLAGS="-fPIC"
-export ASFLAGS="-fPIC"
+
+#I was getting very poor FFmpeg performance when building its dependencies with position-independent code (PIC).
+#PIC should in theory be necessary because this is a shared library. But disabling it just for the internals -- which aren't exported -- seems to link fine and solve the performance issues.
+#I'm pushing it for now and will come back to this.
+#See this Stack Overflow question https://stackoverflow.com/questions/79932256/under-what-circumstances-will-non-pic-internals-in-a-shared-library-work
+
+#export CFLAGS="-fPIC"
+#export CXXFLAGS="-fPIC"
+#export ASFLAGS="-fPIC"
 
 #lame
 wget https://sourceforge.net/projects/lame/files/lame/${LAME_VERSION}/lame-${LAME_VERSION}.tar.gz
