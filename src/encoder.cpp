@@ -32,8 +32,8 @@ static void handleInvalidArgument(EventCallback pCallback, const std::string &ke
         pCallback,
         EVENTTYPE_SETUP_FAILURE,
         std::format("Invalid value '{}' for key '{}'.",
-                    key,
-                    value));
+                    value,
+                    key));
 }
 
 /**
