@@ -21,10 +21,6 @@ find_library(VORBIS vorbis REQUIRED)
 find_library(VORBISENC vorbisenc REQUIRED)
 find_library(OPUS opus REQUIRED)
 find_library(LAME mp3lame REQUIRED)
-find_library(CRYPTO crypto REQUIRED)
-find_library(SSL ssl required)
-
-find_library(TLS tls required)
 find_library(AVFORMAT avformat REQUIRED)
 find_library(AVCODEC avcodec REQUIRED)
 find_library(AVFILTER avfilter REQUIRED)
@@ -39,6 +35,7 @@ encoder.cpp
             util.cpp
            )
            target_compile_options(casturria_support.mjs PRIVATE
+           -flto
            )
 target_link_options(casturria_support.mjs PRIVATE
 --no-entry
@@ -63,9 +60,6 @@ ${VORBISENC}
 ${OPUS}
 ${OGG}
 ${LAME}
-${CRYPTO}
-${TLS}
-${SSL}
 ${Z}
 simdjson
 

@@ -1,3 +1,4 @@
+#!/bin/bash
 #CVC support layer
 #Installation bootstrap script
 #Copyright (C) 2026  Jordan Verner and contributors
@@ -18,30 +19,14 @@
 set -eu
 
 #Dependency version control.
-LLVM_VERSION=21
 LAME_VERSION=3.100
 OGG_VERSION=1.3.6
 OPUS_VERSION=1.6.1
 VORBIS_VERSION=1.3.7
 ZLIB_VERSION=1.3.2
-SSL_VERSION=4.2.1
 FFMPEG_VERSION=8.0.1
 
-sudo apt install autoconf make cmake pkg-config git wget nasm lsb-release gnupg xz-utils libssl-dev -y
-
-#Install Clang from LLVM repo.
-wget https://apt.llvm.org/llvm.sh
-chmod 755 llvm.sh
-sudo ./llvm.sh ${LLVM_VERSION}
-rm ./llvm.sh
-
-#Configure Clang as the default C/ C++ compiler.
-sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang-${LLVM_VERSION} 100
-sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang-${LLVM_VERSION} 100
-sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/clang-${LLVM_VERSION} 100
-sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/clang-${LLVM_VERSION} 100
-sudo update-alternatives --install /usr/bin/ld ld /usr/bin/lld-${LLVM_VERSION} 100
-sudo update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-${LLVM_VERSION} 100
+sudo apt install autoconf make cmake pkg-config git wget lsb-release gnupg xz-utils -y
 
 mkdir ./build
 cd ./build
@@ -49,34 +34,31 @@ mkdir ./output
 mkdir ./output/include
 
 PREFIX="`pwd`/output"
-export PKG_CONFIG_PATH=${PREFIX}/lib/pkgconfig
+export EM_PKG_CONFIG_PATH=${PREFIX}/lib/pkgconfig
 export LIBRARY_PATH=${PREFIX}/lib
-#Work around Lame's broken shared build when linking with LLD.
-#export LDFLAGS="-Wl,--undefined-version"
+export cflags=-flto
+export CXXFLAGS="-flto"
 
-#I was getting very poor FFmpeg performance when building its dependencies with position-independent code (PIC).
-#PIC should in theory be necessary because this is a shared library. But disabling it just for the internals -- which aren't exported -- seems to link fine and solve the performance issues.
-#I'm pushing it for now and will come back to this.
-#See this Stack Overflow question https://stackoverflow.com/questions/79932256/under-what-circumstances-will-non-pic-internals-in-a-shared-library-work
-
-#export CFLAGS="-fPIC"
-#export CXXFLAGS="-fPIC"
-#export ASFLAGS="-fPIC"
+#Setup emscripten
+git clone https://github.com/emscripten-core/emsdk.git
+cd emsdk
+./emsdk install latest
+./emsdk activate latest
+cd ..
 
 #lame
 wget https://sourceforge.net/projects/lame/files/lame/${LAME_VERSION}/lame-${LAME_VERSION}.tar.gz
 tar -xpf lame-${LAME_VERSION}.tar.gz
 rm ./lame-${LAME_VERSION}.tar.gz
 cd lame-${LAME_VERSION}
-./configure --prefix=${PREFIX} \
+emconfigure ./configure --prefix=${PREFIX} \
 --disable-shared \
 --enable-static \
---enable-nasm \
 --disable-gtktest \
 --disable-frontend \
 --disable-decoder
-make -j `nproc`
-make install
+emmake make -j `nproc`
+emmake make install
 cd ..
 rm -rf ./lame-${LAME_VERSION}
 
@@ -85,12 +67,12 @@ wget https://downloads.xiph.org/releases/ogg/libogg-${OGG_VERSION}.tar.gz
 tar -xpf libogg-${OGG_VERSION}.tar.gz
 rm ./libogg-${OGG_VERSION}.tar.gz
 cd libogg-${OGG_VERSION}
-./configure \
+emconfigure ./configure \
 --prefix=${PREFIX} \
 --disable-shared \
 --enable-static
-make -j `nproc`
-make install
+emmake make -j `nproc`
+emmake make install
 cd ..
 rm -rf ./libogg-${OGG_VERSION}
 
@@ -99,12 +81,13 @@ wget https://downloads.xiph.org/releases/opus/opus-${OPUS_VERSION}.tar.gz
 tar -xpf opus-${OPUS_VERSION}.tar.gz
 rm ./opus-${OPUS_VERSION}.tar.gz
 cd opus-${OPUS_VERSION}
-./configure \
+emconfigure ./configure \
 --prefix=${PREFIX} \
 --disable-shared \
---enable-static
-make -j `nproc`
-make install
+--enable-static \
+--disable-intrinsics
+emmake make -j `nproc`
+emmake make install
 cd ..
 rm -rf ./opus-${OPUS_VERSION}
 
@@ -113,12 +96,12 @@ wget https://downloads.xiph.org/releases/vorbis/libvorbis-${VORBIS_VERSION}.tar.
 tar -xpf libvorbis-${VORBIS_VERSION}.tar.gz
 rm -rf ./libvorbis-${VORBIS_VERSION}.tar.gz
 cd libvorbis-${VORBIS_VERSION}
-./configure \
+emconfigure ./configure \
 --prefix=${PREFIX} \
 --disable-shared \
 --enable-static
-make -j `nproc`
-make install
+emmake make -j `nproc`
+emmake make install
 cd ..
 rm -rf ./libvorbis-${VORBIS_VERSION}
 
@@ -127,54 +110,43 @@ git clone https://github.com/madler/zlib
 cd zlib
 git fetch --tags
 git checkout v${ZLIB_VERSION}
-./configure \
+emconfigure ./configure \
 --prefix=${PREFIX} \
 --disable-shared \
 --enable-static
-make -j `nproc`
-make install
+emmake make -j `nproc`
+emmake make install
 cd ..
 rm -rf ./zlib
 
-#Libressl
-wget https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-${SSL_VERSION}.tar.gz
-tar -xpf libressl-${SSL_VERSION}.tar.gz
-rm ./libressl-${SSL_VERSION}.tar.gz
-cd libressl-${SSL_VERSION}
-./configure \
---prefix=${PREFIX} \
---disable-shared \
---enable-static
-make -j `nproc`
-make install
-cd ..
-rm -rf ./libressl-${SSL_VERSION}
 #FFmpeg
 wget https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz
 tar -xpf ffmpeg-${FFMPEG_VERSION}.tar.xz
 rm ./ffmpeg-${FFMPEG_VERSION}.tar.xz
 cd ffmpeg-${FFMPEG_VERSION}
-./configure \
+emconfigure ./configure \
 --prefix=${PREFIX} \
 --disable-shared \
 --enable-static \
 --extra-ldflags="-L${PREFIX}/lib" \
---extra-cflags="-I${PREFIX}/include -fuse-ld=lld" \
+--extra-cflags="-I${PREFIX}/include -flto" \
 --pkg-config-flags="--static" \
+--cc=emcc \
+--cxx=em++ \
+--ar=emar \
+--ranlib=emranlib \
 --disable-devices \
 --disable-programs \
 --disable-asm \
 --disable-swscale \
---disable-lzma \
---disable-bzlib \
+--disable-network \
+--disable-pthreads \
 --enable-libmp3lame \
 --enable-libopus \
 --enable-libvorbis \
---enable-libtls \
 --disable-openssl \
---enable-pic \
 --enable-version3
-make -j `nproc`
-make install
+emmake make -j `nproc`
+emmake make install
 cd ..
 rm -rf ./ffmpeg-${FFMPEG_VERSION}
