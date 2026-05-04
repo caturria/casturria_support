@@ -44,6 +44,8 @@ git clone https://github.com/emscripten-core/emsdk.git
 cd emsdk
 ./emsdk install latest
 ./emsdk activate latest
+source `pwd`/emsdk_env.sh
+
 cd ..
 
 #lame
@@ -141,6 +143,7 @@ emconfigure ./configure \
 --disable-swscale \
 --disable-network \
 --disable-pthreads \
+--disable-sdl2 \
 --enable-libmp3lame \
 --enable-libopus \
 --enable-libvorbis \
@@ -150,3 +153,11 @@ emmake make -j `nproc`
 emmake make install
 cd ..
 rm -rf ./ffmpeg-${FFMPEG_VERSION}
+
+#Now build the library itself:
+
+cd ..
+
+emmake cmake -DCMAKE_PREFIX_PATH=`pwd`/build/output -DCMAKE_LIBRARY_PATH=`pwd`/build/output/lib -DCMAKE_INSTALL_PREFIX=`pwd`/build/output .
+emmake make
+emmake make install

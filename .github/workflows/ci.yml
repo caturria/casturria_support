@@ -11,13 +11,8 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Build dependencies
+      - name: Build the library and its dependencies
         run: |
           sudo apt update -y
           sudo apt upgrade -y
           bash ./bootstrap.sh
-      - name: Build the library
-        run: |
-          cmake -DCMAKE_PREFIX_PATH=`pwd`/build/output -DCMAKE_LIBRARY_PATH=`pwd`/build/output/lib -DCMAKE_INSTALL_PREFIX=`pwd`/build/output .
-          make
-          make install
