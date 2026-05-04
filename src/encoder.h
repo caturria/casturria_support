@@ -21,6 +21,7 @@
 #include "events.h"
 #include <stdint.h>
 #include <stddef.h>
+#include <emscripten.h>
 
 extern "C"
 {
@@ -39,12 +40,14 @@ extern "C"
      * @param inChannels the channel count of the incoming audio.
      * @param options a list of muxer and codec parameters in JSON format.
      */
+    EMSCRIPTEN_KEEPALIVE
     Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_t inSampleRate, uint8_t inChannels, const char *pOptions);
 
     /**
      * Frees an encoder handle previously returned by casturria_newEncoder().
      * @param pEncoder the encoder handle to free.
      */
+    EMSCRIPTEN_KEEPALIVE
     void casturria_freeEncoder(Encoder *pEncoder);
 
     /**
@@ -55,11 +58,13 @@ extern "C"
      * @note One frame equates to one sample per channel.
      * @note In case of failure, this function will dispatch events to the EventHandler previously supplied to casturria_newEncoder().
      */
+    EMSCRIPTEN_KEEPALIVE
     void casturria_encode(Encoder *pEncoder, const float *pInput, size_t count);
 
     /**
      * Call this function after successful encoding but before casturria_freeEncoder().
      * @warning Failure to finalize an encoder results in a truncated file at best or an entirely unplayable one at worst.
      */
+    EMSCRIPTEN_KEEPALIVE
     void casturria_finalizeEncoder(Encoder *pEncoder);
 }

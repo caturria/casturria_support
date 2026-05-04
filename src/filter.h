@@ -20,6 +20,7 @@
 #include "events.h"
 #include <stdint.h>
 #include <stddef.h>
+#include <emscripten.h>
 
 extern "C"
 {
@@ -35,24 +36,28 @@ extern "C"
      * @param outSampleRate the desired output sample rate.
      * @param outChannels the desired output sample count.
      */
+    EMSCRIPTEN_KEEPALIVE
     FilterGraph *casturria_newFilterGraph(const char *pDescription, EventCallback pCallback, uint32_t inSampleRate, uint8_t inChannels, uint32_t outSampleRate, uint8_t outChannels);
 
     /**
      * Frees a filter graph.
      * @param pFilterGraph the filter graph to free.
      */
+    EMSCRIPTEN_KEEPALIVE
     void casturria_freeFilterGraph(FilterGraph *pFilterGraph);
 
     /**
      * Query the number of inputs held by the graph.
      * @param pFilterGraph the filter graph to query.
      */
+    EMSCRIPTEN_KEEPALIVE
     size_t casturria_getFilterGraphInputs(const FilterGraph *pFilterGraph);
 
     /**
      * Query the number of outputs held by a filter graph.
      * @param filterGraph the filter graph to query.
      */
+    EMSCRIPTEN_KEEPALIVE
     size_t casturria_getFilterGraphOutputs(const FilterGraph *pFilterGraph);
 
     /**
@@ -64,6 +69,7 @@ extern "C"
      * @param input the input to send to.
      * @note to obtain the final few samples once input ends, send a null pointer as pInput with a count of 0, then call casturria_receiveOutput until no more data comes out.
      */
+    EMSCRIPTEN_KEEPALIVE
     bool casturria_sendInput(FilterGraph *pFilterGraph, const float *pBuffer, size_t count, size_t input);
 
     /**
@@ -77,5 +83,6 @@ extern "C"
      * @param output the output to extract samples from.
      * @returns number of samples per channel actually received.
      */
+    EMSCRIPTEN_KEEPALIVE
     size_t casturria_receiveOutput(FilterGraph *pFilterGraph, float *pBuffer, size_t count, size_t output);
 }

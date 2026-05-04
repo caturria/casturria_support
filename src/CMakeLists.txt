@@ -32,19 +32,27 @@ find_library(AVUTIL avutil REQUIRED)
 find_library(SWRESAMPLE swresample REQUIRED)
 find_library(Z z REQUIRED)
 
-add_library(casturria_support SHARED
+add_executable(casturria_support.mjs
 decoder.cpp
 encoder.cpp
             filter.cpp
             util.cpp
            )
-target_link_options(casturria_support PRIVATE
-                    -fuse-ld=lld
-                             -Wl,--version-script=libcasturria_support.map
-                             -Wl,--no-undefined
-                                     -static-libstdc++
+           target_compile_options(casturria_support.mjs PRIVATE
+           )
+target_link_options(casturria_support.mjs PRIVATE
+--no-entry
+-sENVIRONMENT=node
+           -s NO_DISABLE_EXCEPTION_CATCHING
+           -sMALLOC=mimalloc
+-sNODERAWFS=1
+                      -sALLOW_TABLE_GROWTH
+                      -sALLOW_MEMORY_GROWTH
+                      -sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction,cwrap,HEAPF32,UTF8ToString
+                      -sEXPORTED_FUNCTIONS=_malloc,_free
+
                                      )
-                                     target_link_libraries(casturria_support PRIVATE
+                                     target_link_libraries(casturria_support.mjs PRIVATE
 ${AVFORMAT}
 ${AVCODEC}
 ${SWRESAMPLE}
@@ -62,6 +70,6 @@ ${Z}
 simdjson
 
 )
-target_include_directories(casturria_support PRIVATE
+target_include_directories(casturria_support.mjs PRIVATE
                            ${DEP_INCLUDE_DIR})
-install(TARGETS casturria_support)
+install(TARGETS casturria_support.mjs)
