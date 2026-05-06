@@ -36,18 +36,19 @@ encoder.cpp
            )
            target_compile_options(casturria_support.mjs PRIVATE
            -flto
+           -fwasm-exceptions
            )
 target_link_options(casturria_support.mjs PRIVATE
 --no-entry
 -sENVIRONMENT=node
-           -s NO_DISABLE_EXCEPTION_CATCHING
-           -sMALLOC=mimalloc
 -sNODERAWFS=1
+-sNODE_HOST_ENV=0
                       -sALLOW_TABLE_GROWTH
                       -sALLOW_MEMORY_GROWTH
-                      -sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction,cwrap,HEAPF32,UTF8ToString
+                      -sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction,cwrap,HEAPF32,UTF8ToString,stringToNewUTF8
                       -sEXPORTED_FUNCTIONS=_malloc,_free
-
+                      -flto
+                      -fwasm-exceptions
                                      )
                                      target_link_libraries(casturria_support.mjs PRIVATE
 ${AVFORMAT}
