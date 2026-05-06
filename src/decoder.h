@@ -22,6 +22,7 @@
 #include "events.h"
 #include <stdint.h>
 #include <stddef.h>
+#include <emscripten.h>
 
 extern "C"
 {
@@ -41,12 +42,14 @@ extern "C"
      * @note Several events will be dispatched to the provided EventCallback during the course of decoder initialization.
      * @returns Decoder* on success or nullptr on failure.
      */
+    EMSCRIPTEN_KEEPALIVE
     Decoder *casturria_newDecoder(const char *pURL, EventCallback pCallback, uint32_t sampleRate, uint8_t channels);
 
     /**
      * Frees a Decoder handle previously returned by casturria_newDecoder().
      * @param pDecoder the decoder handle to free.
      */
+    EMSCRIPTEN_KEEPALIVE
     void casturria_freeDecoder(Decoder *pDecoder);
 
     /**
@@ -58,5 +61,6 @@ extern "C"
      * @note One frame equates to one sample per decoded channel, so 1024 frames would yield 2048 samples if the output is stereo.
      * @note This function may dispatch events to the EventHandler previously supplied to casturria_NewDecoder().
      */
+    EMSCRIPTEN_KEEPALIVE
     size_t casturria_decode(Decoder *pDecoder, float *pOutput, size_t count);
 }

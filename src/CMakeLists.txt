@@ -21,10 +21,6 @@ find_library(VORBIS vorbis REQUIRED)
 find_library(VORBISENC vorbisenc REQUIRED)
 find_library(OPUS opus REQUIRED)
 find_library(LAME mp3lame REQUIRED)
-find_library(CRYPTO crypto REQUIRED)
-find_library(SSL ssl required)
-
-find_library(TLS tls required)
 find_library(AVFORMAT avformat REQUIRED)
 find_library(AVCODEC avcodec REQUIRED)
 find_library(AVFILTER avfilter REQUIRED)
@@ -32,19 +28,28 @@ find_library(AVUTIL avutil REQUIRED)
 find_library(SWRESAMPLE swresample REQUIRED)
 find_library(Z z REQUIRED)
 
-add_library(casturria_support SHARED
+add_executable(casturria_support.mjs
 decoder.cpp
 encoder.cpp
             filter.cpp
             util.cpp
            )
-target_link_options(casturria_support PRIVATE
-                    -fuse-ld=lld
-                             -Wl,--version-script=libcasturria_support.map
-                             -Wl,--no-undefined
-                                     -static-libstdc++
+           target_compile_options(casturria_support.mjs PRIVATE
+           -flto
+           )
+target_link_options(casturria_support.mjs PRIVATE
+--no-entry
+-sENVIRONMENT=node
+           -s NO_DISABLE_EXCEPTION_CATCHING
+           -sMALLOC=mimalloc
+-sNODERAWFS=1
+                      -sALLOW_TABLE_GROWTH
+                      -sALLOW_MEMORY_GROWTH
+                      -sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction,cwrap,HEAPF32,UTF8ToString
+                      -sEXPORTED_FUNCTIONS=_malloc,_free
+
                                      )
-                                     target_link_libraries(casturria_support PRIVATE
+                                     target_link_libraries(casturria_support.mjs PRIVATE
 ${AVFORMAT}
 ${AVCODEC}
 ${SWRESAMPLE}
@@ -55,13 +60,10 @@ ${VORBISENC}
 ${OPUS}
 ${OGG}
 ${LAME}
-${CRYPTO}
-${TLS}
-${SSL}
 ${Z}
 simdjson
 
 )
-target_include_directories(casturria_support PRIVATE
+target_include_directories(casturria_support.mjs PRIVATE
                            ${DEP_INCLUDE_DIR})
-install(TARGETS casturria_support)
+install(TARGETS casturria_support.mjs)
