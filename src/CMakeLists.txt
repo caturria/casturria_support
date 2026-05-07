@@ -41,12 +41,12 @@ encoder.cpp
 target_link_options(casturria_support.mjs PRIVATE
 --no-entry
 -sENVIRONMENT=node
--sNODERAWFS=1
 -sNODE_HOST_ENV=0
                       -sALLOW_TABLE_GROWTH
                       -sALLOW_MEMORY_GROWTH
-                      -sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction,cwrap,HEAPF32,UTF8ToString,stringToNewUTF8
+                      -sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction,cwrap,HEAPF32,UTF8ToString,stringToNewUTF8,FS
                       -sEXPORTED_FUNCTIONS=_malloc,_free
+                      -lnodefs.js
                       -flto
                       -fwasm-exceptions
                                      )
