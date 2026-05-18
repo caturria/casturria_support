@@ -44,7 +44,7 @@ target_link_options(casturria_support.mjs PRIVATE
 -sNODE_HOST_ENV=0
                       -sALLOW_TABLE_GROWTH
                       -sALLOW_MEMORY_GROWTH
-                      -sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction,cwrap,HEAPF32,UTF8ToString,stringToNewUTF8,FS
+                      -sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction,cwrap,HEAPU8,HEAPF32,UTF8ToString,stringToNewUTF8,FS
                       -sEXPORTED_FUNCTIONS=_malloc,_free
                       -lnodefs.js
                       -flto
