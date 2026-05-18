@@ -26,22 +26,32 @@
 extern "C"
 {
     /**
-     * A handle to an audio decoder.
+     * A handle to an audio encoder.
      * @note Not threadsafe.
      */
     struct AvCollection;
     typedef struct AvCollection Encoder;
 
     /**
+     * A callback for receiving data directly from FFmpeg.
+     * This is the same callback signature as scene in avio.h.
+     * The supplied callback is passed directly to FFmpeg's IO context.
+     * The pOpaque parameter is unused; a Javascript closure should be used here.
+     */
+    typedef int (*WriteCallback)(void *pOpaque, const uint8_t *pBuf, int bufSize);
+
+    /**
      * Opens a file for encoding.
      * @param pURL any valid URL to an audio asset supported by FFmpeg.
-     * @param pCallback the callback to use for error reporting.
+     * @param pMessageCallback the callback to use for logging and error reporting.
      * @param inSampleRate the sample rate of the incoming audio.
      * @param inChannels the channel count of the incoming audio.
-     * @param options a list of muxer and codec parameters in JSON format.
+     * @param options a list of muxer and codec private options in JSON format.
+     * @param pWriteCallback an optional custom write callback.
+     * @note the write callback can only be used with streaming formats that can be written in a single pass. In other words, there is no seek callback for now.
      */
     EMSCRIPTEN_KEEPALIVE
-    Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_t inSampleRate, uint8_t inChannels, const char *pOptions);
+    Encoder *casturria_newEncoder(const char *pURL, EventCallback pEventCallback, uint32_t inSampleRate, uint8_t inChannels, const char *pOptions, WriteCallback pWriteCallback);
 
     /**
      * Frees an encoder handle previously returned by casturria_newEncoder().

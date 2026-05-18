@@ -20,6 +20,8 @@
 #include "internal/util.h"
 #include <simdjson.h>
 
+const size_t WRITE_BUFFER_SIZE = 4096;
+
 /**
  * Internal: handle an invalid argument error.
  * @param pCallback the callback to dispatch the error to.
@@ -143,9 +145,9 @@ uint32_t negotiateSampleRate(const AVCodec *pCodec, uint32_t requestedSampleRate
     return consideredSampleRate;
 }
 
-Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_t inSampleRate, uint8_t inChannels, const char *pOptions)
+Encoder *casturria_newEncoder(const char *pURL, EventCallback pEventCallback, uint32_t inSampleRate, uint8_t inChannels, const char *pOptions, WriteCallback pWriteCallback)
 {
-    auto pEncoder = newAvCollection(pCallback);
+    auto pEncoder = newAvCollection(pEventCallback);
     if (pEncoder == nullptr)
     {
         return nullptr; // Events are already handled.
@@ -159,7 +161,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_
     pEncoder->pFormatContext = avformat_alloc_context();
     if (pEncoder->pFormatContext == nullptr)
     {
-        dispatchOutOfMemory(pCallback, EVENTTYPE_SETUP_FAILURE);
+        dispatchOutOfMemory(pEventCallback, EVENTTYPE_SETUP_FAILURE);
         return fail(pEncoder);
     }
 
@@ -189,7 +191,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_
                 pFormatContext->oformat = av_guess_format(value.c_str(), nullptr, nullptr);
                 if (pFormatContext->oformat == nullptr)
                 {
-                    handleInvalidArgument(pCallback, key, value);
+                    handleInvalidArgument(pEventCallback, key, value);
                     return fail(pEncoder);
                 }
             }
@@ -200,7 +202,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_
                 pCodec = avcodec_find_encoder_by_name(value.c_str());
                 if (pCodec == nullptr)
                 {
-                    handleInvalidArgument(pCallback, key, value);
+                    handleInvalidArgument(pEventCallback, key, value);
                     return fail(pEncoder);
                 }
             }
@@ -243,7 +245,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_
 
                 if (result < 0)
                 {
-                    dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
+                    dispatchEvent(pEventCallback, EVENTTYPE_SETUP_FAILURE, result);
                     return fail(pEncoder);
                 }
             }
@@ -252,7 +254,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_
 
     catch (simdjson::simdjson_error &e)
     {
-        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, e.what());
+        dispatchEvent(pEventCallback, EVENTTYPE_SETUP_FAILURE, e.what());
         return fail(pEncoder);
     }
     // JSON parsing complete. We should have everything we need to build an encoder now.
@@ -261,14 +263,14 @@ Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_
     {
         // JSON lacks a preference, and the format couldn't be deduced from the URL.
         dispatchEvent(
-            pCallback,
+            pEventCallback,
             EVENTTYPE_SETUP_FAILURE,
             std::format("Unable to determine an appropriate output format for '{}'.",
                         pURL));
         return fail(pEncoder);
     }
     dispatchEvent(
-        pCallback,
+        pEventCallback,
         EVENTTYPE_SETUP_MILESTONE,
         std::format("Selected output format '{}' for '{}'.",
                     pFormatContext->oformat->long_name,
@@ -284,7 +286,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_
     {
         // No way to proceed if we still lack a codec here.
         dispatchEvent(
-            pCallback,
+            pEventCallback,
             EVENTTYPE_SETUP_FAILURE,
             std::format("Unable to determine an appropriate output codec for '{}'.",
                         pURL));
@@ -292,7 +294,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_
         return fail(pEncoder);
     }
     dispatchEvent(
-        pCallback,
+        pEventCallback,
         EVENTTYPE_SETUP_MILESTONE,
         std::format("Selected output codec '{}' for '{}'.",
                     pCodec->long_name,
@@ -302,7 +304,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_
     auto pCodecContext = pEncoder->pCodecContext;
     if (pCodecContext == nullptr)
     {
-        dispatchOutOfMemory(pCallback, EVENTTYPE_SETUP_FAILURE);
+        dispatchOutOfMemory(pEventCallback, EVENTTYPE_SETUP_FAILURE);
         return fail(pEncoder);
     }
 
@@ -311,7 +313,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_
     if (pCodecContext->sample_fmt == AV_SAMPLE_FMT_NONE)
     {
         dispatchEvent(
-            pCallback,
+            pEventCallback,
             EVENTTYPE_SETUP_FAILURE,
             std::format("Failed to negotiate an appropriate output sample format for codec '{}'.",
                         pCodec->long_name));
@@ -322,7 +324,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_
     if (pCodecContext->sample_rate == 0)
     {
         dispatchEvent(
-            pCallback,
+            pEventCallback,
             EVENTTYPE_SETUP_FAILURE,
             std::format("Failed to negotiate an appropriate output sampling rate for codec '{}'.",
                         pCodec->long_name));
@@ -331,7 +333,7 @@ Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_
     }
 
     dispatchEvent(
-        pCallback,
+        pEventCallback,
         EVENTTYPE_SETUP_MILESTONE,
         std::format("The asset '{}' will be encoded to sample format {} at {} Hz.",
                     pURL,
@@ -352,21 +354,21 @@ Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_
     result = avcodec_open2(pCodecContext, pCodec, &pEncoder->pOptions);
     if (result < 0)
     {
-        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
+        dispatchEvent(pEventCallback, EVENTTYPE_SETUP_FAILURE, result);
         return fail(pEncoder);
     }
 
     auto pStream = avformat_new_stream(pFormatContext, pCodec);
     if (pStream == nullptr)
     {
-        dispatchOutOfMemory(pCallback, EVENTTYPE_SETUP_FAILURE);
+        dispatchOutOfMemory(pEventCallback, EVENTTYPE_SETUP_FAILURE);
         return fail(pEncoder);
     }
 
     result = avcodec_parameters_from_context(pStream->codecpar, pCodecContext);
     if (result < 0)
     {
-        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
+        dispatchEvent(pEventCallback, EVENTTYPE_SETUP_FAILURE, result);
         return fail(pEncoder);
     }
 
@@ -375,22 +377,43 @@ Encoder *casturria_newEncoder(const char *pURL, EventCallback pCallback, uint32_
         return fail(pEncoder);
     }
 
-    result = avio_open2(&pEncoder->pIOContext, pURL, AVIO_FLAG_WRITE, nullptr, &pEncoder->pOptions);
-    if (result < 0)
+    if (pWriteCallback == nullptr)
     {
-        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
-        return fail(pEncoder);
+        // Normal path: let Libavformat/ Libavio decide how to open the URL.
+        result = avio_open2(&pEncoder->pIOContext, pURL, AVIO_FLAG_WRITE, nullptr, &pEncoder->pOptions);
+        if (result < 0)
+        {
+            dispatchEvent(pEventCallback, EVENTTYPE_SETUP_FAILURE, result);
+            return fail(pEncoder);
+        }
+    }
+
+    else
+    {
+        // Alternate path: hook up custom I/O.
+        pEncoder->pIOBuffer = (uint8_t *)av_malloc(WRITE_BUFFER_SIZE);
+        if (pEncoder->pIOBuffer == nullptr)
+        {
+            dispatchOutOfMemory(pEventCallback, EVENTTYPE_SETUP_FAILURE);
+            return fail(pEncoder);
+        }
+        pEncoder->pIOContext = avio_alloc_context(pEncoder->pIOBuffer, WRITE_BUFFER_SIZE, 1, nullptr, nullptr, pWriteCallback, nullptr);
+        if (pEncoder->pIOContext == nullptr)
+        {
+            dispatchOutOfMemory(pEventCallback, EVENTTYPE_SETUP_FAILURE);
+            return fail(pEncoder);
+        }
     }
     pFormatContext->pb = pEncoder->pIOContext;
 
     result = avformat_write_header(pFormatContext, &pEncoder->pOptions);
     if (result < 0)
     {
-        dispatchEvent(pCallback, EVENTTYPE_SETUP_FAILURE, result);
+        dispatchEvent(pEventCallback, EVENTTYPE_SETUP_FAILURE, result);
         return fail(pEncoder);
     }
     dispatchEvent(
-        pCallback,
+        pEventCallback,
         EVENTTYPE_SETUP_MILESTONE,
         std::format("Successfully opened and wrote header to asset '{}'.",
                     pURL));

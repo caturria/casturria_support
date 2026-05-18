@@ -63,34 +63,40 @@ void freeAvCollection(AvCollection *pCollection)
     {
         return;
     }
+
     av_dict_free(&pCollection->pOptions);
     if (pCollection->pFrame != nullptr)
     {
         av_frame_free(&pCollection->pFrame);
     }
+
     if (pCollection->pPacket != nullptr)
     {
         av_packet_free(&pCollection->pPacket);
     }
+
     if (pCollection->pFilterGraph != nullptr)
     {
         avfilter_graph_free(&pCollection->pFilterGraph);
     }
+
     if (pCollection->pCodecContext != nullptr)
     {
         avcodec_free_context(&pCollection->pCodecContext);
     }
+
+    if (pCollection->pIOBuffer != nullptr && pCollection->pIOContext == nullptr)
+    {
+        // This state can theoretically happen in the event of OOM when allocating custom IO context.
+        av_free(pCollection->pIOBuffer);
+        pCollection->pIOBuffer = nullptr;
+    }
+
     if (pCollection->pFormatContext != nullptr)
     {
         avformat_close_input(&pCollection->pFormatContext);
     }
 
-    /*
-    if (pCollection->pIOContext != nullptr)
-        {
-            avio_close(pCollection->pIOContext);
-        }
-            */
     free(pCollection);
 }
 

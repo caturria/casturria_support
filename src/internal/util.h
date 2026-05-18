@@ -50,6 +50,7 @@ struct AvCollection
     AVFilterGraph *pFilterGraph;
     AVFilterContext *pFilterGraphIn, *pFilterGraphOut; // abuffer and abuffersink. They belong to the filter graph.
     AVDictionary *pOptions;                            // Used during encoder setup.
+    uint8_t *pIOBuffer;                                // This is only allocated when a custom write callback is used with an encoder.
     uint32_t inSampleRate;                             // Sample rate of the input.
     uint32_t outSampleRate;                            // Sample rate being encoded or decoded to.
     AVChannelLayout inChannelLayout;
